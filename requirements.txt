@@ -8,3 +8,4 @@ pywin32==310
 PyYAML==6.0.2
 PyYAML==6.0.2
 rapidfuzz==3.12.2
+ruamel.yaml==0.19.1

@@ -11,7 +11,7 @@ import keyboard
 import winsound
 import hashlib
 import win32gui, win32con
-import dxcam
+from PIL import ImageGrab
 from datetime import datetime, timedelta
 from rapidfuzz import fuzz
 from datetime import datetime
@@ -39,7 +39,6 @@ OUTPUT_DIR = './log'
 TESSERACT_PATH = user_config['TESSERACT_PATH']
 
 pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
-_camera_instance = None
 scale_factor = 1
 departments_coords = None
 debug_mode = user_config['debug_mode']
@@ -187,38 +186,20 @@ def cut_by_lines(list_img, horizontal_lines, min_area, prefix='cell'):
     return cells
 
 # Screenshot
-def get_camera():
-    global _camera_instance
-    if _camera_instance is None:
-        _camera_instance = dxcam.create()
-    return _camera_instance
-
 def screenshot(type='binary', hint='placeholder', region=None):
     """
     region (x, y, w, h)
     """
-    camera = get_camera()
-    frame = None
-    max_retries = 3
-    attempts = 0
+    if region:
+        x, y, w, h = region
+        pil_img = ImageGrab.grab(bbox=(x, y, x+w, y+h))
+    else:
+        pil_img = ImageGrab.grab()
 
-    while attempts < max_retries:
-        if region:
-            x, y, w, h = region
-            frame = camera.grab(region=(x, y, x+w, y+h))
-        else:
-            frame = camera.grab()
-
-        # 不是None且不全黑
-        if frame is not None:
-            break
-            
-        attempts += 1
-        
-            
+    frame = np.array(pil_img)
 
     if frame is None:
-        raise Exception(f'! Failed: screenshot after {max_retries} attempts !')
+        raise Exception(f'! Failed: screenshot !')
 
     original_img = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
     gray = cv2.cvtColor(original_img, cv2.COLOR_BGR2GRAY)
