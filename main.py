@@ -19,6 +19,12 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 import ctypes
 
+try:
+    from daily_fetcher import maybe_update_recipes
+    _HAS_FETCHER = True
+except ImportError:
+    _HAS_FETCHER = False
+
 class IncorrectPageError(Exception):
     def __init__(self, message="未检测到特勤处建造界面"):
         self.message = message
@@ -603,18 +609,32 @@ def print_restart_info(remain_time):
     print(output)
     
 
-def main():
+def main(stop_event=None, status_callback=None):
+    """自动制造主循环
+
+    Args:
+        stop_event: threading.Event, 设置后中断循环
+        status_callback: callable, 每次迭代报告 (remain_times, wait_list) 状态
+    """
     print('###### 程序初始化 ######')
+    # 每天首次运行时，从 orzice.com 获取今日制造推荐
+    if _HAS_FETCHER:
+        try:
+            maybe_update_recipes()
+        except Exception as e:
+            print(f"[WARN] 获取今日配方失败: {e}，将使用现有配置继续")
+    else:
+        print("[INFO] daily_fetcher 未就绪（缺少依赖？），跳过自动更新")
     background_mode = user_config['background_mode']
     hwnd = win32gui.FindWindow('UnrealWindow', '三角洲行动  ')
-    
-    while True:
+
+    while stop_event is None or not stop_event.is_set():
         try:
             high_beep()
             time.sleep(1)
             if background_mode:
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                time.sleep(3)  
+                time.sleep(3)
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             time.sleep(6)
 
@@ -625,27 +645,49 @@ def main():
             update_wait_list()
             remain_times = dash_page()
             update_wait_list()
-            
+
+            # 报告状态
+            if status_callback:
+                status_callback(remain_times, wait_list)
+
             time.sleep(3)
-            
+
             remain_time = min(remain_times)
             remain_time += 30     # 30 sec buffer
-            
+
             if background_mode:
                 alt_tab()
-                    
+
             print_restart_info(remain_time)
             low_beep()
-            time.sleep(remain_time)
+
+            # 可中断休眠
+            if stop_event is not None:
+                if stop_event.wait(timeout=remain_time):
+                    print("用户手动停止")
+                    return
+            else:
+                time.sleep(remain_time)
         except IncorrectPageError as e:
             low_beep()
             print(f'界面异常: {e}')
-            input('回到特勤处制造界面后, 按 *回车* 键重试...')
+            if stop_event is not None:
+                print('等待 30 秒后自动重试...')
+                if stop_event.wait(timeout=30):
+                    print("用户手动停止")
+                    return
+            else:
+                input('回到特勤处制造界面后, 按 *回车* 键重试...')
         except Exception as e:
             low_beep()
             print(e)
-            input('程序异常, 按 *回车* 键退出')
-            return
+            if stop_event is not None:
+                if status_callback:
+                    status_callback([0, 0, 0, 0], {k: None for k in wait_list})
+                return
+            else:
+                input('程序异常, 按 *回车* 键退出')
+                return
             
 
 def list_OCR_test(department, categories):
