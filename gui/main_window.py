@@ -17,7 +17,7 @@ import os
 import time as time_module
 from datetime import datetime
 
-# 将项目根目录加入路径
+# 项目根目录
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
@@ -123,8 +123,66 @@ class MainWindow(tk.Tk):
     # ── 构建界面 ────────────────────────────────────────
 
     def _build_ui(self):
-        # ── 顶部框架：控制面板 + 推荐配方 ──
-        top_frame = ttk.Frame(self, padding=self.PADDING)
+        dept_list = ['tech', 'work', 'medical', 'armor']
+        positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        # ── Notebook 标签页 ──
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.X, side=tk.TOP, padx=self.PADDING, pady=(self.PADDING, 0))
+
+        # ── Tab 1：单账号（原有控制面板 + 推荐配方） ──
+        single_tab = ttk.Frame(self.notebook)
+        self.notebook.add(single_tab, text='  单账号  ')
+        self._build_single_account_ui(single_tab)
+
+        # ── Tab 2：多账号 ──
+        multi_tab = ttk.Frame(self.notebook)
+        self.notebook.add(multi_tab, text='  多账号  ')
+        from gui.account_panel import AccountPanel
+        self.account_panel = AccountPanel(multi_tab, main_window=self)
+        self.account_panel.pack(fill=tk.BOTH, expand=True)
+
+        # ── 部门状态（共享） ──
+        status_frame = ttk.LabelFrame(self, text='部门状态', padding=self.PADDING)
+        status_frame.pack(fill=tk.X, side=tk.TOP, padx=self.PADDING, pady=(self.PADDING, 0))
+
+        self.dep_status_labels = {}
+        for dep in dept_list:
+            row = ttk.Frame(status_frame)
+            row.pack(fill=tk.X, pady=1)
+            name_label = ttk.Label(row, text=f'{self.DEP_NAMES.get(dep, dep)}: ', width=8)
+            name_label.pack(side=tk.LEFT)
+            bar = ttk.Progressbar(row, length=200, mode='determinate')
+            bar.pack(side=tk.LEFT, padx=4)
+            info = ttk.Label(row, text='--', width=28)
+            info.pack(side=tk.LEFT)
+            self.dep_status_labels[dep] = {'bar': bar, 'info': info}
+
+        # ── 运行日志（共享） ──
+        log_frame = ttk.LabelFrame(self, text='运行日志', padding=self.PADDING)
+        log_frame.pack(fill=tk.BOTH, expand=True, side=tk.TOP, padx=self.PADDING, pady=(self.PADDING, 0))
+
+        log_inner = ttk.Frame(log_frame)
+        log_inner.pack(fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(log_inner)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.log_text = tk.Text(log_inner, height=10, wrap=tk.WORD, state=tk.DISABLED,
+                                 yscrollcommand=scrollbar.set, font=('Consolas', 9))
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.log_text.yview)
+
+        clear_btn = ttk.Button(log_frame, text='清空日志', command=self._clear_log)
+        clear_btn.pack(anchor=tk.E, pady=(2, 0))
+
+        # ── 状态栏 ──
+        self.status_bar = ttk.Label(self, text='就绪', relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.pack(fill=tk.X, side=tk.BOTTOM, padx=self.PADDING, pady=(0, self.PADDING))
+
+    # ── 单账号 UI ────────────────────────────────────────
+
+    def _build_single_account_ui(self, parent):
+        """单账号标签页：控制面板 + 推荐配方"""
+        top_frame = ttk.Frame(parent, padding=self.PADDING)
         top_frame.pack(fill=tk.X, side=tk.TOP)
 
         # ── 控制面板 ──
@@ -173,42 +231,6 @@ class MainWindow(tk.Tk):
             label = ttk.Label(frame, text='--', anchor=tk.CENTER, font=('', 10, 'bold'))
             label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.recipe_labels[dep] = label
-
-        # ── 部门状态 ──
-        status_frame = ttk.LabelFrame(self, text='部门状态', padding=self.PADDING)
-        status_frame.pack(fill=tk.X, side=tk.TOP, padx=self.PADDING, pady=(0, self.PADDING))
-
-        self.dep_status_labels = {}
-        for i, dep in enumerate(dept_list):
-            row = ttk.Frame(status_frame)
-            row.pack(fill=tk.X, pady=1)
-            name_label = ttk.Label(row, text=f'{self.DEP_NAMES.get(dep, dep)}: ', width=8)
-            name_label.pack(side=tk.LEFT)
-            bar = ttk.Progressbar(row, length=200, mode='determinate')
-            bar.pack(side=tk.LEFT, padx=4)
-            info = ttk.Label(row, text='--', width=28)
-            info.pack(side=tk.LEFT)
-            self.dep_status_labels[dep] = {'bar': bar, 'info': info}
-
-        # ── 运行日志 ──
-        log_frame = ttk.LabelFrame(self, text='运行日志', padding=self.PADDING)
-        log_frame.pack(fill=tk.BOTH, expand=True, side=tk.TOP, padx=self.PADDING, pady=(0, self.PADDING))
-
-        log_inner = ttk.Frame(log_frame)
-        log_inner.pack(fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(log_inner)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.log_text = tk.Text(log_inner, height=10, wrap=tk.WORD, state=tk.DISABLED,
-                                 yscrollcommand=scrollbar.set, font=('Consolas', 9))
-        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.log_text.yview)
-
-        clear_btn = ttk.Button(log_frame, text='清空日志', command=self._clear_log)
-        clear_btn.pack(anchor=tk.E, pady=(2, 0))
-
-        # ── 状态栏 ──
-        self.status_bar = ttk.Label(self, text='就绪', relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(fill=tk.X, side=tk.BOTTOM, padx=self.PADDING, pady=(0, self.PADDING))
 
     # ── 配置加载 ────────────────────────────────────────
 
@@ -270,6 +292,10 @@ class MainWindow(tk.Tk):
     def _start_automation(self):
         if self.worker_thread and self.worker_thread.is_alive():
             return
+        # 检查多账号是否在运行
+        if self._is_multi_running():
+            print('[单账号] 多账号模式正在运行，请先停止')
+            return
 
         self.stop_event.clear()
         self.status_indicator.itemconfig(self._status_dot, fill='green')
@@ -281,6 +307,11 @@ class MainWindow(tk.Tk):
         self.worker_thread = threading.Thread(target=self._run_automation, daemon=True)
         self.worker_thread.start()
         print('=== 自动制造循环已启动 ===')
+
+    def _is_multi_running(self):
+        """检查多账号调度是否正在运行"""
+        return (hasattr(self, 'account_panel') and self.account_panel is not None
+                and self.account_panel._is_running)
 
     def _stop_automation(self):
         print('正在停止自动制造...')
@@ -410,6 +441,13 @@ class MainWindow(tk.Tk):
         if self.worker_thread and self.worker_thread.is_alive():
             self.stop_event.set()
             self.worker_thread.join(timeout=3)
+        # 停止多账号调度
+        if hasattr(self, 'account_panel') and self.account_panel is not None:
+            if self.account_panel._is_running:
+                self.account_panel._stop_scheduler()
+                # 等待线程退出
+                if self.account_panel.scheduler_thread:
+                    self.account_panel.scheduler_thread.join(timeout=3)
         # 恢复标准输出
         sys.stdout = self._original_stdout
         sys.stderr = self._original_stderr

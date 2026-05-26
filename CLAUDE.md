@@ -11,7 +11,7 @@ Delta Force 三角洲行动 自动化制造脚本。通过截图 → OCR 文字�
 - **Python**: 3.11 (conda env: `deltaforce`)
 - **OS**: Windows only (uses pywin32, keyboard, dxcam)
 - **Tesseract-OCR**: bundled at `dist/Tesseract-OCR/`
-- **Setup**: `conda activate deltaforce && pip install -r requirements.txt`
+- **Setup**: `conda run -n deltaforce pip install -r requirements.txt`
 
 ## Running
 
@@ -19,6 +19,29 @@ Delta Force 三角洲行动 自动化制造脚本。通过截图 → OCR 文字�
 set PYTHONIOENCODING=utf-8
 python main.py
 ```
+
+### GUI 模式
+
+```bash
+conda run -n deltaforce python gui/app.py
+```
+
+GUI 基于 tkinter，提供启动/停止控制、实时部门状态、运行日志、今日推荐配方显示。
+
+### 关闭程序
+
+```bash
+# 查看 Python 进程
+tasklist //fi "IMAGENAME eq python.exe"
+
+# 强制关闭所有 Python 进程（GUI 和后台任务）
+taskkill //f //im python.exe
+
+# 或按 PID 单独关闭
+taskkill //f //pid <进程ID>
+```
+
+> 注意：在 git-bash 中使用 `taskkill` 时，参数前需加双斜杠 `//` 避免路径转换。`pkill` 在 Windows git-bash 中可能无效。
 
 ## Architecture
 

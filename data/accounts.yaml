@@ -1,0 +1,38 @@
+accounts:
+- name: 大号
+  click_pos:
+  - 954
+  - 632
+  enabled: true
+- name: 小号
+  click_pos:
+  - 983
+  - 678
+  enabled: false
+wegame:
+  switch_account_btn_pos:
+  - 1040
+  - 588
+  login_btn_pos:
+  - 998
+  - 704
+  game_app_pos:
+  - 204
+  - 374
+  launch_btn_pos:
+  - 1517
+  - 930
+  mode_btn_pos:
+  - 472
+  - 482
+  dash_entry_pos:
+  - 844
+  - 60
+  account_avatar_pos:
+  - 1563
+  - 87
+  switch_user_btn_pos:
+  - 1518
+  - 330
+  exit_method: alt_f4
+  account_timeout: 600
