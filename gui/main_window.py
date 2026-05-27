@@ -73,8 +73,8 @@ class MainWindow(tk.Tk):
         super().__init__()
 
         self.title('🔺 Force 自动制造  v1.0')
-        self.geometry('820x680')
-        self.minsize(700, 600)
+        self.geometry('880x780')
+        self.minsize(700, 650)
         self.resizable(True, True)
 
         # ── 线程控制 ──
@@ -104,6 +104,8 @@ class MainWindow(tk.Tk):
         sys.stdout = self._StdoutRedirector(self.log_queue)
         sys.stderr = self._StdoutRedirector(self.log_queue)
 
+        print('[GUI] 日志系统就绪')
+
     # ── 内部类：打印重定向 ──────────────────────────────
 
     class _StdoutRedirector:
@@ -111,14 +113,23 @@ class MainWindow(tk.Tk):
 
         def __init__(self, log_queue):
             self.queue = log_queue
+            self.encoding = 'utf-8'
+            self.errors = 'replace'
+            self.newlines = None
 
         def write(self, text):
-            if text.strip():
+            if not text:
+                return
+            stripped = text.strip()
+            if stripped:
                 timestamp = datetime.now().strftime('%H:%M:%S')
-                self.queue.put(f'[{timestamp}] {text.strip()}')
+                self.queue.put(f'[{timestamp}] {stripped}')
 
         def flush(self):
             pass
+
+        def isatty(self):
+            return False
 
     # ── 构建界面 ────────────────────────────────────────
 
@@ -126,9 +137,15 @@ class MainWindow(tk.Tk):
         dept_list = ['tech', 'work', 'medical', 'armor']
         positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
+        # ── 主窗口 grid 布局（确保日志区域始终有空间） ──
+        self.grid_rowconfigure(0, weight=1)  # notebook: 与日志平分
+        self.grid_rowconfigure(1, weight=0)  # 状态面板: 固定高度
+        self.grid_rowconfigure(2, weight=1)  # 日志: 与 notebook 平分
+        self.grid_columnconfigure(0, weight=1)
+
         # ── Notebook 标签页 ──
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill=tk.X, side=tk.TOP, padx=self.PADDING, pady=(self.PADDING, 0))
+        self.notebook.grid(row=0, column=0, sticky='ew', padx=self.PADDING, pady=(self.PADDING, 0))
 
         # ── Tab 1：单账号（原有控制面板 + 推荐配方） ──
         single_tab = ttk.Frame(self.notebook)
@@ -144,7 +161,7 @@ class MainWindow(tk.Tk):
 
         # ── 部门状态（共享） ──
         status_frame = ttk.LabelFrame(self, text='部门状态', padding=self.PADDING)
-        status_frame.pack(fill=tk.X, side=tk.TOP, padx=self.PADDING, pady=(self.PADDING, 0))
+        status_frame.grid(row=1, column=0, sticky='ew', padx=self.PADDING, pady=(self.PADDING, 0))
 
         self.dep_status_labels = {}
         for dep in dept_list:
@@ -160,7 +177,7 @@ class MainWindow(tk.Tk):
 
         # ── 运行日志（共享） ──
         log_frame = ttk.LabelFrame(self, text='运行日志', padding=self.PADDING)
-        log_frame.pack(fill=tk.BOTH, expand=True, side=tk.TOP, padx=self.PADDING, pady=(self.PADDING, 0))
+        log_frame.grid(row=2, column=0, sticky='nsew', padx=self.PADDING, pady=(self.PADDING, 0))
 
         log_inner = ttk.Frame(log_frame)
         log_inner.pack(fill=tk.BOTH, expand=True)
@@ -176,7 +193,7 @@ class MainWindow(tk.Tk):
 
         # ── 状态栏 ──
         self.status_bar = ttk.Label(self, text='就绪', relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(fill=tk.X, side=tk.BOTTOM, padx=self.PADDING, pady=(0, self.PADDING))
+        self.status_bar.grid(row=3, column=0, sticky='ew', padx=self.PADDING, pady=(0, self.PADDING))
 
     # ── 单账号 UI ────────────────────────────────────────
 
@@ -322,14 +339,16 @@ class MainWindow(tk.Tk):
 
     def _run_automation(self):
         """在工作线程中运行 main()"""
-        import main as auto_module
         try:
+            import main as auto_module
             auto_module.main(
                 stop_event=self.stop_event,
                 status_callback=lambda s, w: self.status_queue.put((s, w))
             )
         except Exception as e:
             print(f'[ERROR] 自动化异常: {e}')
+            import traceback
+            traceback.print_exc()
 
         # 线程结束，通知 GUI
         self.status_queue.put(None)  # 哨兵
@@ -385,10 +404,13 @@ class MainWindow(tk.Tk):
 
     def _append_log(self, text):
         """向日志框追加一行（主线程调用）"""
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, text + '\n')
-        self.log_text.see(tk.END)
-        self.log_text.config(state=tk.DISABLED)
+        try:
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.insert(tk.END, text + '\n')
+            self.log_text.see(tk.END)
+            self.log_text.config(state=tk.DISABLED)
+        except Exception:
+            pass  # 若控件已销毁则静默忽略
 
     def _clear_log(self):
         self.log_text.config(state=tk.NORMAL)
