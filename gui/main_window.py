@@ -87,6 +87,10 @@ class MainWindow(tk.Tk):
         self._original_stdout = sys.stdout
         self._original_stderr = sys.stderr
 
+        # ── 多标签页独立控件集合 ──
+        self.dep_status_labels_list = []  # 每个 tab 有一套 status labels
+        self.log_texts = []               # 每个 tab 有一个 log_text
+
         # ── 构建界面 ──
         self._build_ui()
 
@@ -134,20 +138,15 @@ class MainWindow(tk.Tk):
     # ── 构建界面 ────────────────────────────────────────
 
     def _build_ui(self):
-        dept_list = ['tech', 'work', 'medical', 'armor']
-        positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-        # ── 主窗口 grid 布局（确保日志区域始终有空间） ──
-        self.grid_rowconfigure(0, weight=1)  # notebook: 与日志平分
-        self.grid_rowconfigure(1, weight=0)  # 状态面板: 固定高度
-        self.grid_rowconfigure(2, weight=1)  # 日志: 与 notebook 平分
+        # ── 主窗口 grid（只有 notebook + 底部状态栏） ──
+        self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # ── Notebook 标签页 ──
         self.notebook = ttk.Notebook(self)
-        self.notebook.grid(row=0, column=0, sticky='ew', padx=self.PADDING, pady=(self.PADDING, 0))
+        self.notebook.grid(row=0, column=0, sticky='nsew',
+                           padx=self.PADDING, pady=(self.PADDING, 0))
 
-        # ── Tab 1：单账号（原有控制面板 + 推荐配方） ──
+        # ── Tab 1：单账号 ──
         single_tab = ttk.Frame(self.notebook)
         self.notebook.add(single_tab, text='  单账号  ')
         self._build_single_account_ui(single_tab)
@@ -155,56 +154,61 @@ class MainWindow(tk.Tk):
         # ── Tab 2：多账号 ──
         multi_tab = ttk.Frame(self.notebook)
         self.notebook.add(multi_tab, text='  多账号  ')
-        from gui.account_panel import AccountPanel
-        self.account_panel = AccountPanel(multi_tab, main_window=self)
-        self.account_panel.pack(fill=tk.BOTH, expand=True)
+        self._build_multi_account_ui(multi_tab)
 
-        # ── 部门状态（共享） ──
-        status_frame = ttk.LabelFrame(self, text='部门状态', padding=self.PADDING)
-        status_frame.grid(row=1, column=0, sticky='ew', padx=self.PADDING, pady=(self.PADDING, 0))
+        # ── 底部状态栏 ──
+        self.status_bar = ttk.Label(self, text='就绪', relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.grid(row=1, column=0, sticky='ew',
+                             padx=self.PADDING, pady=(0, self.PADDING))
 
-        self.dep_status_labels = {}
-        for dep in dept_list:
-            row = ttk.Frame(status_frame)
+    # ── 共享控件工厂 ────────────────────────────────────
+
+    def _build_status_section(self, parent):
+        """创建部门状态面板，返回 (frame, labels_dict)"""
+        frame = ttk.LabelFrame(parent, text='部门状态', padding=self.PADDING)
+        labels = {}
+        for dep in ('tech', 'work', 'medical', 'armor'):
+            row = ttk.Frame(frame)
             row.pack(fill=tk.X, pady=1)
-            name_label = ttk.Label(row, text=f'{self.DEP_NAMES.get(dep, dep)}: ', width=8)
-            name_label.pack(side=tk.LEFT)
+            ttk.Label(row, text=f'{self.DEP_NAMES[dep]}: ', width=8).pack(side=tk.LEFT)
             bar = ttk.Progressbar(row, length=200, mode='determinate')
             bar.pack(side=tk.LEFT, padx=4)
             info = ttk.Label(row, text='--', width=28)
             info.pack(side=tk.LEFT)
-            self.dep_status_labels[dep] = {'bar': bar, 'info': info}
+            labels[dep] = {'bar': bar, 'info': info}
+        return frame, labels
 
-        # ── 运行日志（共享） ──
-        log_frame = ttk.LabelFrame(self, text='运行日志', padding=self.PADDING)
-        log_frame.grid(row=2, column=0, sticky='nsew', padx=self.PADDING, pady=(self.PADDING, 0))
-
-        log_inner = ttk.Frame(log_frame)
-        log_inner.pack(fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(log_inner)
+    def _build_log_section(self, parent):
+        """创建日志面板，返回 (frame, text_widget)"""
+        frame = ttk.LabelFrame(parent, text='运行日志', padding=self.PADDING)
+        inner = ttk.Frame(frame)
+        inner.pack(fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(inner)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.log_text = tk.Text(log_inner, height=10, wrap=tk.WORD, state=tk.DISABLED,
-                                 yscrollcommand=scrollbar.set, font=('Consolas', 9))
-        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.log_text.yview)
-
-        clear_btn = ttk.Button(log_frame, text='清空日志', command=self._clear_log)
-        clear_btn.pack(anchor=tk.E, pady=(2, 0))
-
-        # ── 状态栏 ──
-        self.status_bar = ttk.Label(self, text='就绪', relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.grid(row=3, column=0, sticky='ew', padx=self.PADDING, pady=(0, self.PADDING))
+        log_text = tk.Text(inner, height=6, wrap=tk.WORD, state=tk.DISABLED,
+                           yscrollcommand=scrollbar.set, font=('Consolas', 9))
+        log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=log_text.yview)
+        ttk.Button(frame, text='清空日志', command=self._clear_log).pack(anchor=tk.E, pady=(2, 0))
+        return frame, log_text
 
     # ── 单账号 UI ────────────────────────────────────────
 
     def _build_single_account_ui(self, parent):
-        """单账号标签页：控制面板 + 推荐配方"""
-        top_frame = ttk.Frame(parent, padding=self.PADDING)
-        top_frame.pack(fill=tk.X, side=tk.TOP)
+        parent.grid_rowconfigure(0, weight=0)  # 顶部: 控制+配方
+        parent.grid_rowconfigure(1, weight=0)  # 状态
+        parent.grid_rowconfigure(2, weight=1)  # 日志: 占满剩余
+        parent.grid_columnconfigure(0, weight=1)
 
-        # ── 控制面板 ──
-        ctrl = ttk.LabelFrame(top_frame, text='控制面板', padding=self.PADDING)
-        ctrl.pack(side=tk.LEFT, fill=tk.Y, padx=(0, self.PADDING))
+        # ── 顶部区域（控制面板 + 推荐配方，紧凑排列） ──
+        top = ttk.Frame(parent, padding=self.PADDING)
+        top.grid(row=0, column=0, sticky='ew')
+        top.grid_columnconfigure(0, weight=0)  # 控制面板不扩展
+        top.grid_columnconfigure(1, weight=0)  # 推荐配方不扩展（紧凑）
+
+        # 控制面板
+        ctrl = ttk.LabelFrame(top, text='控制面板', padding=self.PADDING)
+        ctrl.grid(row=0, column=0, sticky='n', padx=(0, self.PADDING))
 
         btn_frame = ttk.Frame(ctrl)
         btn_frame.pack(fill=tk.X, pady=(0, 4))
@@ -227,9 +231,9 @@ class MainWindow(tk.Tk):
         ttk.Checkbutton(ctrl, text='后台模式', variable=self.bg_var, command=self._on_bg_toggle).pack(anchor=tk.W)
         ttk.Checkbutton(ctrl, text='调试模式', variable=self.debug_var, command=self._on_debug_toggle).pack(anchor=tk.W)
 
-        # ── 推荐配方 ──
-        recipe = ttk.LabelFrame(top_frame, text='今日推荐配方', padding=self.PADDING)
-        recipe.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 推荐配方（紧凑，不扩展）
+        recipe = ttk.LabelFrame(top, text='今日推荐配方', padding=self.PADDING)
+        recipe.grid(row=0, column=1, sticky='nsew')
 
         self.update_time_label = ttk.Label(recipe, text='更新于: --')
         self.update_time_label.pack(anchor=tk.E)
@@ -240,14 +244,49 @@ class MainWindow(tk.Tk):
         recipe_grid.rowconfigure((0, 1), weight=1)
 
         self.recipe_labels = {}
-        dept_list = ['tech', 'work', 'medical', 'armor']
-        positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
-        for dep, pos in zip(dept_list, positions):
-            frame = ttk.LabelFrame(recipe_grid, text=self.DEP_NAMES.get(dep, dep))
-            frame.grid(row=pos[0], column=pos[1], sticky='nsew', padx=2, pady=2)
+        for dep, (r, c) in zip(
+            ('tech', 'work', 'medical', 'armor'),
+            [(0, 0), (0, 1), (1, 0), (1, 1)]
+        ):
+            frame = ttk.LabelFrame(recipe_grid, text=self.DEP_NAMES[dep])
+            frame.grid(row=r, column=c, sticky='nsew', padx=2, pady=2)
             label = ttk.Label(frame, text='--', anchor=tk.CENTER, font=('', 10, 'bold'))
             label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.recipe_labels[dep] = label
+
+        # ── 部门状态 ──
+        status_frame, labels = self._build_status_section(parent)
+        status_frame.grid(row=1, column=0, sticky='ew', padx=self.PADDING, pady=(0, self.PADDING))
+        self.dep_status_labels_list.append(labels)
+
+        # ── 运行日志 ──
+        log_frame, log_text = self._build_log_section(parent)
+        log_frame.grid(row=2, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
+        self.log_texts.append(log_text)
+
+    # ── 多账号 UI ────────────────────────────────────────
+
+    def _build_multi_account_ui(self, parent):
+        parent.grid_rowconfigure(0, weight=0)  # 账号管理面板
+        parent.grid_rowconfigure(1, weight=0)  # 状态
+        parent.grid_rowconfigure(2, weight=1)  # 日志: 占满剩余
+        parent.grid_columnconfigure(0, weight=1)
+
+        # 账号管理面板
+        from gui.account_panel import AccountPanel
+        self.account_panel = AccountPanel(parent, main_window=self)
+        self.account_panel.grid(row=0, column=0, sticky='nsew',
+                                padx=self.PADDING, pady=(self.PADDING, 0))
+
+        # 部门状态
+        status_frame, labels = self._build_status_section(parent)
+        status_frame.grid(row=1, column=0, sticky='ew', padx=self.PADDING, pady=(0, self.PADDING))
+        self.dep_status_labels_list.append(labels)
+
+        # 运行日志
+        log_frame, log_text = self._build_log_section(parent)
+        log_frame.grid(row=2, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
+        self.log_texts.append(log_text)
 
     # ── 配置加载 ────────────────────────────────────────
 
@@ -361,61 +400,63 @@ class MainWindow(tk.Tk):
 
         dept_list = ['tech', 'work', 'medical', 'armor']
         for dep, remain in zip(dept_list, remain_times):
-            labels = self.dep_status_labels[dep]
-            bar = labels['bar']
-            info = labels['info']
+            for labels in self.dep_status_labels_list:
+                bar = labels[dep]['bar']
+                info = labels[dep]['info']
 
-            if remain == -2:
-                # 空闲
-                bar['value'] = 0
-                info.config(text='○ 空闲中')
-            elif remain == -1:
-                # 已完成
-                bar['value'] = 100
-                info.config(text='✓ 已完成')
-            else:
-                # 制造中
-                max_val = 3600  # 假设最长 1 小时
-                pct = min(100, int((1 - remain / max_val) * 100))
-                bar['value'] = pct
-                h, m = divmod(int(remain), 3600)
-                m, s = divmod(m, 60)
-                if h > 0:
-                    info.config(text=f'● 制造中 剩余 {h}:{m:02d}:{s:02d}')
+                if remain == -2:
+                    bar['value'] = 0
+                    info.config(text='○ 空闲中')
+                elif remain == -1:
+                    bar['value'] = 100
+                    info.config(text='✓ 已完成')
                 else:
-                    info.config(text=f'● 制造中 剩余 {m:02d}:{s:02d}')
-
-            # 更新状态栏
-            status_parts = []
-            for dep2, remain2 in zip(dept_list, remain_times):
-                name2 = self.DEP_NAMES.get(dep2, dep2)
-                if remain2 == -2:
-                    status_parts.append(f'{name2}:空闲')
-                elif remain2 == -1:
-                    status_parts.append(f'{name2}:完成')
-                else:
-                    m, s = divmod(int(remain2), 60)
-                    h, m = divmod(m, 60)
+                    max_val = 3600
+                    pct = min(100, int((1 - remain / max_val) * 100))
+                    bar['value'] = pct
+                    h, m = divmod(int(remain), 3600)
+                    m, s = divmod(m, 60)
                     if h > 0:
-                        status_parts.append(f'{name2}:{h}h{m:02d}m')
+                        info.config(text=f'● 制造中 剩余 {h}:{m:02d}:{s:02d}')
                     else:
-                        status_parts.append(f'{name2}:{m:02d}m{s:02d}s')
-            self.status_bar.config(text=' | '.join(status_parts))
+                        info.config(text=f'● 制造中 剩余 {m:02d}:{s:02d}')
+
+        # 更新状态栏
+        status_parts = []
+        for dep2, remain2 in zip(dept_list, remain_times):
+            name2 = self.DEP_NAMES.get(dep2, dep2)
+            if remain2 == -2:
+                status_parts.append(f'{name2}:空闲')
+            elif remain2 == -1:
+                status_parts.append(f'{name2}:完成')
+            else:
+                m, s = divmod(int(remain2), 60)
+                h, m = divmod(m, 60)
+                if h > 0:
+                    status_parts.append(f'{name2}:{h}h{m:02d}m')
+                else:
+                    status_parts.append(f'{name2}:{m:02d}m{s:02d}s')
+        self.status_bar.config(text=' | '.join(status_parts))
 
     def _append_log(self, text):
         """向日志框追加一行（主线程调用）"""
-        try:
-            self.log_text.config(state=tk.NORMAL)
-            self.log_text.insert(tk.END, text + '\n')
-            self.log_text.see(tk.END)
-            self.log_text.config(state=tk.DISABLED)
-        except Exception:
-            pass  # 若控件已销毁则静默忽略
+        for log_text in self.log_texts:
+            try:
+                log_text.config(state=tk.NORMAL)
+                log_text.insert(tk.END, text + '\n')
+                log_text.see(tk.END)
+                log_text.config(state=tk.DISABLED)
+            except Exception:
+                pass
 
     def _clear_log(self):
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.delete(1.0, tk.END)
-        self.log_text.config(state=tk.DISABLED)
+        for log_text in self.log_texts:
+            try:
+                log_text.config(state=tk.NORMAL)
+                log_text.delete(1.0, tk.END)
+                log_text.config(state=tk.DISABLED)
+            except Exception:
+                pass
 
     # ── 轮询循环（主线程） ──────────────────────────────
 
@@ -450,9 +491,10 @@ class MainWindow(tk.Tk):
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
         self.status_bar.config(text='已停止')
-        for dep in ['tech', 'work', 'medical', 'armor']:
-            self.dep_status_labels[dep]['bar']['value'] = 0
-            self.dep_status_labels[dep]['info'].config(text='--')
+        for labels in self.dep_status_labels_list:
+            for dep in ['tech', 'work', 'medical', 'armor']:
+                labels[dep]['bar']['value'] = 0
+                labels[dep]['info'].config(text='--')
         self._refresh_recipe_display()
         print('=== 自动制造循环已停止 ===')
 
