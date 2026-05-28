@@ -4,11 +4,12 @@ accounts:
   - 954
   - 632
   enabled: true
+  estimated_end: 00:36
 - name: 小号
   click_pos:
   - 983
   - 678
-  enabled: false
+  enabled: true
 wegame:
   switch_account_btn_pos:
   - 1040
@@ -23,16 +24,20 @@ wegame:
   - 1517
   - 930
   mode_btn_pos:
-  - 472
-  - 482
+  - 509
+  - 458
   dash_entry_pos:
-  - 844
-  - 60
+  - 831
+  - 58
   account_avatar_pos:
   - 1563
   - 87
   switch_user_btn_pos:
   - 1518
   - 330
+  wait_before_app: 6
+  wait_game_launch: 70
+  wait_before_space: 10
+  craft_start_wait: 70
   exit_method: alt_f4
   account_timeout: 600

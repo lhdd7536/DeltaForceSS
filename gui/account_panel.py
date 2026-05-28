@@ -76,7 +76,8 @@ class AccountPanel(ttk.Frame):
             enabled = '是' if acc.get('enabled', True) else '否'
             pos = acc.get('click_pos', [0, 0])
             pos_str = f'{pos[0]}, {pos[1]}'
-            self.tree.insert('', tk.END, values=(i, acc.get('name', ''), pos_str, enabled),
+            end_time = acc.get('estimated_end', '') or ''
+            self.tree.insert('', tk.END, values=(i, acc.get('name', ''), pos_str, enabled, end_time),
                              tags=('disabled',) if not acc.get('enabled', True) else ())
 
     # ── 构建界面 ───────────────────────────────────────
@@ -86,17 +87,19 @@ class AccountPanel(ttk.Frame):
         list_frame = ttk.LabelFrame(self, text='账号列表', padding=4)
         list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
-        columns = ('#', '名称', '坐标', '启用')
+        columns = ('#', '名称', '坐标', '启用', '完成时间')
         self.tree = ttk.Treeview(list_frame, columns=columns, show='headings',
                                  height=8, selectmode='browse')
         self.tree.heading('#', text='#')
         self.tree.heading('名称', text='名称')
         self.tree.heading('坐标', text='坐标')
         self.tree.heading('启用', text='启用')
+        self.tree.heading('完成时间', text='完成时间')
         self.tree.column('#', width=30, anchor=tk.CENTER)
         self.tree.column('名称', width=120)
-        self.tree.column('坐标', width=120, anchor=tk.CENTER)
+        self.tree.column('坐标', width=110, anchor=tk.CENTER)
         self.tree.column('启用', width=50, anchor=tk.CENTER)
+        self.tree.column('完成时间', width=80, anchor=tk.CENTER)
         self.tree.tag_configure('disabled', foreground='gray')
 
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -115,6 +118,7 @@ class AccountPanel(ttk.Frame):
         ttk.Button(btn_frame, text='删除', command=self._delete_account).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text='↑ 上移', command=self._move_up).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text='↓ 下移', command=self._move_down).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text='启用/禁用', command=self._toggle_enabled).pack(side=tk.LEFT, padx=2)
 
         # ── 控制区 ──
         ctrl_frame = ttk.LabelFrame(self, text='控制面板', padding=4)
@@ -135,37 +139,50 @@ class AccountPanel(ttk.Frame):
         self.timeout_entry = ttk.Entry(ctrl_row, width=6, textvariable=self.timeout_var)
         self.timeout_entry.pack(side=tk.LEFT)
 
+        ctrl_row2 = ttk.Frame(ctrl_frame)
+        ctrl_row2.pack(fill=tk.X, pady=2)
+        ttk.Label(ctrl_row2, text='启动制造等待(秒):').pack(side=tk.LEFT, padx=(0, 2))
+        self.start_wait_var = tk.StringVar(value=str(self.wegame_cfg.get('craft_start_wait', 180)))
+        ttk.Entry(ctrl_row2, width=6, textvariable=self.start_wait_var).pack(side=tk.LEFT, padx=1)
+        ttk.Label(ctrl_row2, text='(dash_page 一轮)').pack(side=tk.LEFT, padx=(4, 0))
+
         # 当前运行状态
         self.status_label = ttk.Label(ctrl_frame, text='就绪', foreground='gray')
         self.status_label.pack(anchor=tk.W, pady=(2, 0))
 
-        # ── WeGame 配置（13 步坐标） ──
-        wg_frame = ttk.LabelFrame(self, text='WeGame 配置（步骤 1-13）', padding=4)
-        wg_frame.pack(fill=tk.X, pady=(0, 4))
+        # ── WeGame 配置（按阶段分组，支持滚动） ──
+        wg_outer = ttk.LabelFrame(self, text='WeGame 配置', padding=4)
+        wg_outer.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
-        # 坐标字段定义: (label, step, config_key, default)
-        coord_fields = [
-            ('账号管理', '1', 'switch_account_btn_pos', [60, 60]),
-            ('当前头像', '12', 'account_avatar_pos', [60, 60]),
-            ('登录按钮', '3', 'login_btn_pos', [960, 640]),
-            ('三角洲应用', '4', 'game_app_pos', [150, 400]),
-            ('启动按钮', '5', 'launch_btn_pos', [960, 800]),
-            ('烽火地带', '6', 'mode_btn_pos', [300, 500]),
-            ('特勤处入口', '9', 'dash_entry_pos', [600, 350]),
-            ('切换用户', '13', 'switch_user_btn_pos', [1200, 100]),
-        ]
+        # 可滚动画布
+        wg_canvas = tk.Canvas(wg_outer, borderwidth=0, highlightthickness=0)
+        wg_scrollbar = ttk.Scrollbar(wg_outer, orient=tk.VERTICAL, command=wg_canvas.yview)
+        wg_inner = ttk.Frame(wg_canvas)
+        wg_inner.bind('<Configure>', lambda e: wg_canvas.configure(scrollregion=wg_canvas.bbox('all')))
+        wg_canvas.create_window((0, 0), window=wg_inner, anchor='nw')
+        wg_canvas.configure(yscrollcommand=wg_scrollbar.set)
+
+        wg_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        wg_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 鼠标滚轮绑定（进入区域时启用，离开时禁用，避免干扰其他区域）
+        def _on_mousewheel(event):
+            wg_canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
+        wg_canvas.bind('<Enter>', lambda e: wg_canvas.bind_all('<MouseWheel>', _on_mousewheel))
+        wg_canvas.bind('<Leave>', lambda e: wg_canvas.unbind_all('<MouseWheel>'))
 
         self._wg_vars = {}
-        for i, (label, step, key, default) in enumerate(coord_fields):
-            row = ttk.Frame(wg_frame)
-            row.pack(fill=tk.X, pady=1)
-            ttk.Label(row, text=f'步骤{step} {label}:', width=12).pack(side=tk.LEFT)
+        self._wait_vars = {}
 
+        def _add_coord_row(parent, step, label, key, default):
+            """添加一行坐标配置"""
+            row = ttk.Frame(parent)
+            row.pack(fill=tk.X, pady=1)
+            ttk.Label(row, text=f'步骤{step} {label}:', width=14).pack(side=tk.LEFT)
             val = self.wegame_cfg.get(key, default)
             x_var = tk.StringVar(value=str(val[0]))
             y_var = tk.StringVar(value=str(val[1]))
             self._wg_vars[key] = (x_var, y_var)
-
             ttk.Entry(row, width=6, textvariable=x_var).pack(side=tk.LEFT, padx=1)
             ttk.Label(row, text=',').pack(side=tk.LEFT)
             ttk.Entry(row, width=6, textvariable=y_var).pack(side=tk.LEFT, padx=1)
@@ -173,15 +190,57 @@ class AccountPanel(ttk.Frame):
                        command=lambda vx=x_var, vy=y_var: self._capture_position(vx, vy)
                        ).pack(side=tk.LEFT, padx=(4, 0))
 
-        # 退出方式 + 保存
-        wg_bottom = ttk.Frame(wg_frame)
-        wg_bottom.pack(fill=tk.X, pady=(4, 0))
-        ttk.Label(wg_bottom, text='退出方式:').pack(side=tk.LEFT)
+        def _add_wait_row(parent, label, key, default):
+            """添加一行等待时长配置"""
+            row = ttk.Frame(parent)
+            row.pack(fill=tk.X, pady=1)
+            ttk.Label(row, text=label, width=14).pack(side=tk.LEFT)
+            var = tk.StringVar(value=str(self.wegame_cfg.get(key, default)))
+            self._wait_vars[key] = var
+            ttk.Entry(row, width=6, textvariable=var).pack(side=tk.LEFT, padx=1)
+            ttk.Label(row, text='秒').pack(side=tk.LEFT)
+
+        # ── 登录阶段（步骤 1-3） ──
+        phase1 = ttk.LabelFrame(wg_inner, text='登录阶段（步骤 1-3）', padding=4)
+        phase1.pack(fill=tk.X, pady=2)
+        _add_coord_row(phase1, '1', '账号管理', 'switch_account_btn_pos', [60, 60])
+        ttk.Label(phase1, text='步骤2 点击账号:  从上方账号列表中选择').pack(anchor=tk.W, pady=1)
+        _add_coord_row(phase1, '3', '登录按钮', 'login_btn_pos', [960, 640])
+
+        # ── 启动阶段（步骤 4-5） ──
+        phase2 = ttk.LabelFrame(wg_inner, text='启动阶段（步骤 4-5）', padding=4)
+        phase2.pack(fill=tk.X, pady=2)
+        _add_coord_row(phase2, '4', '三角洲应用', 'game_app_pos', [150, 400])
+        _add_wait_row(phase2, '     等待:', 'wait_before_app', 6)
+        _add_coord_row(phase2, '5', '启动按钮', 'launch_btn_pos', [960, 800])
+
+        # ── 导航阶段（步骤 6-9） ──
+        phase3 = ttk.LabelFrame(wg_inner, text='导航阶段（步骤 6-9）', padding=4)
+        phase3.pack(fill=tk.X, pady=2)
+        _add_coord_row(phase3, '6', '烽火地带', 'mode_btn_pos', [300, 500])
+        _add_wait_row(phase3, '     游戏加载等待:', 'wait_game_launch', 80)
+        ttk.Label(phase3, text='步骤7 按空格:  (自动执行，跳过开场动画)').pack(anchor=tk.W, pady=1)
+        _add_wait_row(phase3, '     跳动画前等待:', 'wait_before_space', 10)
+        ttk.Label(phase3, text='步骤8 按 Tab:  (自动执行)').pack(anchor=tk.W, pady=1)
+        _add_coord_row(phase3, '9', '特勤处入口', 'dash_entry_pos', [600, 350])
+
+        # ── 切换阶段（步骤 11-13） ──
+        phase4 = ttk.LabelFrame(wg_inner, text='切换阶段（步骤 11-13）', padding=4)
+        phase4.pack(fill=tk.X, pady=2)
+        exit_row = ttk.Frame(phase4)
+        exit_row.pack(fill=tk.X, pady=1)
+        ttk.Label(exit_row, text='步骤11 退出方式:', width=14).pack(side=tk.LEFT)
         self.exit_method_var = tk.StringVar(value=self.wegame_cfg.get('exit_method', 'alt_f4'))
-        exit_combo = ttk.Combobox(wg_bottom, textvariable=self.exit_method_var,
+        exit_combo = ttk.Combobox(exit_row, textvariable=self.exit_method_var,
                                   values=['alt_f4', 'wm_close', 'taskkill'], width=10, state='readonly')
         exit_combo.pack(side=tk.LEFT, padx=2)
-        ttk.Button(wg_bottom, text='保存配置', command=self._save_wg_config).pack(side=tk.LEFT, padx=(10, 0))
+        _add_coord_row(phase4, '12', '当前头像', 'account_avatar_pos', [60, 60])
+        _add_coord_row(phase4, '13', '切换用户', 'switch_user_btn_pos', [1200, 100])
+
+        # 保存按钮
+        save_row = ttk.Frame(wg_inner)
+        save_row.pack(fill=tk.X, pady=(4, 0))
+        ttk.Button(save_row, text='保存配置', command=self._save_wg_config).pack(side=tk.RIGHT)
 
         # 初始化列表
         self._refresh_list()
@@ -254,10 +313,23 @@ class AccountPanel(ttk.Frame):
         self._refresh_list()
         self.tree.selection_set(self.tree.get_children()[idx + 1])
 
+    def _toggle_enabled(self):
+        """切换选中账号的启用/禁用状态"""
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showinfo('提示', '请先选择一个账号')
+            return
+        idx = self.tree.index(sel[0])
+        self.accounts[idx]['enabled'] = not self.accounts[idx].get('enabled', True)
+        status = '启用' if self.accounts[idx]['enabled'] else '禁用'
+        print(f'[多账号] 账号 "{self.accounts[idx]["name"]}" 已{status}')
+        self._save_accounts()
+        self._refresh_list()
+
     # ── WeGame 配置 ────────────────────────────────────
 
     def _save_wg_config(self):
-        """保存 WeGame 配置（全部坐标字段）"""
+        """保存 WeGame 配置（全部坐标字段 + 等待时长）"""
         try:
             # 保存所有坐标字段
             coord_keys = [
@@ -270,9 +342,20 @@ class AccountPanel(ttk.Frame):
                     x_var, y_var = self._wg_vars[key]
                     self.wegame_cfg[key] = [int(x_var.get()), int(y_var.get())]
 
+            # 保存等待时长
+            for key in self._wait_vars:
+                try:
+                    self.wegame_cfg[key] = int(self._wait_vars[key].get())
+                except ValueError:
+                    pass
+
             self.wegame_cfg['exit_method'] = self.exit_method_var.get()
             try:
                 self.wegame_cfg['account_timeout'] = int(self.timeout_var.get())
+            except ValueError:
+                pass
+            try:
+                self.wegame_cfg['craft_start_wait'] = int(self.start_wait_var.get())
             except ValueError:
                 pass
             self._save_accounts()
@@ -352,9 +435,10 @@ class AccountPanel(ttk.Frame):
         print(f'{name}: 步骤3 点击登录 {login_pos}')
         wegame_switcher.click_login(login_pos)
 
-        # 步骤 4：等待 6 秒 → 点击三角洲行动应用
-        print(f'{name}: 步骤4 等待 6 秒后点击三角洲应用...')
-        if self._wait_check(6):
+        # 步骤 4：等待 → 点击三角洲行动应用
+        wait_before_app = int(wg_cfg.get('wait_before_app', 6))
+        print(f'{name}: 步骤4 等待 {wait_before_app} 秒后点击三角洲应用...')
+        if self._wait_check(wait_before_app):
             return False
         game_pos = wg_cfg.get('game_app_pos', [150, 400])
         wegame_switcher.click_game_app(game_pos)
@@ -364,17 +448,27 @@ class AccountPanel(ttk.Frame):
         print(f'{name}: 步骤5 点击启动 {launch_pos}')
         wegame_switcher.click_launch_btn(launch_pos)
 
-        # 步骤 6：等待 50 秒 → 点击烽火地带模式
-        print(f'{name}: 步骤6 等待游戏加载 50 秒...')
-        if not wegame_switcher.wait_game_window(50):
-            print(f'{name}: 游戏启动超时，跳过')
+        # 步骤 6：等待游戏加载 → 点击烽火地带模式
+        wait_launch = int(wg_cfg.get('wait_game_launch', 80))
+        print(f'{name}: 步骤6 等待 {wait_launch} 秒后点击烽火地带...')
+        # 固定时长等待（可被停止信号中断）
+        if self._wait_check(wait_launch):
             return False
+        # 等待结束后检查并激活游戏窗口
+        hwnd = wegame_switcher.find_window(wegame_switcher.GAME_CLASS, wegame_switcher.GAME_TITLE)
+        if not hwnd:
+            print(f'{name}: 游戏窗口未找到，跳过')
+            return False
+        wegame_switcher.restore_window(hwnd)
+        time.sleep(1)
         mode_pos = wg_cfg.get('mode_btn_pos', [300, 500])
         wegame_switcher.click_game_mode(mode_pos)
+        print(f'{name}: 步骤6 已点击烽火地带 {mode_pos}')
 
-        # 步骤 7：等待 10 秒 → 按 3 次空格
-        print(f'{name}: 步骤7 等待 10 秒后跳过动画...')
-        if self._wait_check(10):
+        # 步骤 7：等待 → 按 3 次空格跳过动画
+        wait_space = int(wg_cfg.get('wait_before_space', 10))
+        print(f'{name}: 步骤7 等待 {wait_space} 秒后跳过动画...')
+        if self._wait_check(wait_space):
             return False
         wegame_switcher.press_space_x3()
 
@@ -390,7 +484,9 @@ class AccountPanel(ttk.Frame):
         return True
 
     def _prepare_next_account(self, wg_cfg):
-        """步骤 12-13：点击当前账号头像 → 切换用户"""
+        """步骤 12-13：激活 WeGame → 点击当前账号头像 → 切换用户"""
+        # 先激活 WeGame 窗口（游戏退出后 WeGame 可能不在前台）
+        wegame_switcher.activate_wegame()
         avatar_pos = wg_cfg.get('account_avatar_pos')
         if avatar_pos:
             print(f'步骤12 点击当前账号头像 {avatar_pos}')
@@ -413,16 +509,15 @@ class AccountPanel(ttk.Frame):
         return False
 
     def _run_scheduler(self):
-        """在工作线程中运行多账号调度（13 步完整流程）"""
+        """在工作线程中运行多账号调度（启动制造即走，不等完成）"""
         try:
             self._load_accounts()
-            cfg = _load_yaml(ACCOUNTS_FILE)
-            accounts = [a for a in cfg.get('accounts', []) if a.get('enabled', True)]
-            wg_cfg = cfg.get('wegame', {})
+            accounts = [a for a in self.accounts if a.get('enabled', True)]
+            wg_cfg = self.wegame_cfg
             try:
-                timeout = int(self.timeout_var.get())
+                start_wait = int(self.start_wait_var.get())
             except ValueError:
-                timeout = 600
+                start_wait = 180
             loop_mode = self.loop_var.get()
 
             if not accounts:
@@ -451,42 +546,72 @@ class AccountPanel(ttk.Frame):
                         self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 导航失败', foreground='red'))
                         continue
 
-                    # 步骤 10：自动制造
-                    print(f'{name}: 步骤10 开始制造（{timeout} 秒）')
-                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 制造中...', foreground='blue'))
+                    # ── 步骤 10：启动制造（不等完成，启动即走） ──
+                    print(f'{name}: 步骤10 启动制造（等待 {start_wait} 秒用于检测并点击制造）')
+                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 启动制造中...', foreground='blue'))
 
                     self.stop_event.clear()
                     self._timer_fired = False
 
-                    timer = threading.Timer(timeout, self._on_timer_fired)
+                    timer = threading.Timer(start_wait, self._on_timer_fired)
                     timer.daemon = True
                     timer.start()
+
+                    # 捕获 dash_page 返回的剩余时间，用于估计完成时间
+                    latest_remain_times = [0, 0, 0, 0]
+
+                    def _capture_callback(remain_times, wait_list):
+                        nonlocal latest_remain_times
+                        latest_remain_times = remain_times
+                        self.main_window.status_queue.put((remain_times, wait_list))
 
                     import main as auto_module
                     try:
                         auto_module.main(
                             stop_event=self.stop_event,
-                            status_callback=self.main_window.status_queue.put
+                            status_callback=_capture_callback
                         )
                     except Exception as e:
                         print(f'{name}: 制造异常: {e}')
                     finally:
                         timer.cancel()
 
+                    # 计算预计完成时间
+                    max_remain = max(latest_remain_times)
+                    if max_remain > 0:
+                        from datetime import datetime, timedelta
+                        est_end = datetime.now() + timedelta(seconds=max_remain)
+                        account['estimated_end'] = est_end.strftime('%H:%M')
+                        print(f'{name}: 制造启动，预计完成 {account["estimated_end"]}')
+                    else:
+                        account['estimated_end'] = '—'
+                        print(f'{name}: 无需制造')
+                    self._save_accounts()
+                    self.after(0, self._refresh_list)
+
                     if self._user_stop:
                         print('[多账号] 用户已停止')
                         self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
                         return
 
-                    # 步骤 11：退出游戏
+                    # 步骤 11：退出游戏（不等制造完成）
                     print(f'{name}: 步骤11 退出游戏')
                     self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
 
                     # 步骤 12-13：准备下一个账号
-                    self._prepare_next_account(wg_cfg)
+                    try:
+                        self._prepare_next_account(wg_cfg)
+                    except Exception as e:
+                        print(f'{name}: 切换账号异常: {e}')
+                        import traceback
+                        traceback.print_exc()
+
+                    time.sleep(3)  # 等待 WeGame 界面稳定
 
                     print(f'{name}: 完成')
-                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 已完成', foreground='green'))
+                    est = account.get('estimated_end', '')
+                    hint = f'{name}: 已完成' + (f'，预计 {est}' if est and est != '—' else '')
+                    self.after(0, lambda h=hint: self.status_label.config(text=h, foreground='green'))
 
                 if not loop_mode:
                     break

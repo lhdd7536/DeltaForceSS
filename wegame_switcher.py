@@ -8,6 +8,7 @@ WeGame 账号切换 + 游戏退出工具模块。
 import time
 import os
 import pyautogui
+pyautogui.FAILSAFE = False  # 自动化脚本中禁用角落保护，避免误触中断
 import win32gui
 import win32con
 import keyboard
@@ -160,6 +161,7 @@ def click_launch_btn(pos):
 def click_game_mode(pos):
     """步骤 6：在游戏大厅中点击烽火地带模式"""
     click_position(pos)
+    print(f'  已点击烽火地带 {pos}')
     time.sleep(1)
 
 

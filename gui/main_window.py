@@ -98,6 +98,9 @@ class MainWindow(tk.Tk):
         self._load_config()
         self._refresh_recipe_display()
 
+        # ── 加载快捷键配置 ──
+        self._load_hotkey()
+
         # ── 启动轮询 ──
         self._poll_loop()
 
@@ -231,6 +234,10 @@ class MainWindow(tk.Tk):
         ttk.Checkbutton(ctrl, text='后台模式', variable=self.bg_var, command=self._on_bg_toggle).pack(anchor=tk.W)
         ttk.Checkbutton(ctrl, text='调试模式', variable=self.debug_var, command=self._on_debug_toggle).pack(anchor=tk.W)
 
+        ttk.Separator(ctrl, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=4)
+        self.hotkey_hint = ttk.Label(ctrl, text='快捷键: F8', foreground='gray')
+        self.hotkey_hint.pack(anchor=tk.W)
+
         # 推荐配方（紧凑，不扩展）
         recipe = ttk.LabelFrame(top, text='今日推荐配方', padding=self.PADDING)
         recipe.grid(row=0, column=1, sticky='nsew')
@@ -320,6 +327,40 @@ class MainWindow(tk.Tk):
 
     def _on_debug_toggle(self):
         self._save_config()
+
+    # ── 快捷键 ────────────────────────────────────────────
+
+    def _load_hotkey(self):
+        """从 user_config.yaml 读取快捷键并绑定"""
+        try:
+            cfg = _load_user_config()
+            hotkey = cfg.get('hotkey', 'f8').strip().lower()
+        except Exception:
+            hotkey = 'f8'
+        self._hotkey_key = hotkey
+
+        # 解绑旧快捷键
+        try:
+            self.unbind(f'<{self._hotkey_key.upper()}>')
+        except Exception:
+            pass
+
+        event_key = f'<{hotkey.upper()}>'
+        self.bind(event_key, self._toggle_automation)
+        self.hotkey_hint.config(text=f'快捷键: {hotkey.upper()}')
+        print(f'[GUI] 快捷键已绑定: {hotkey.upper()}')
+
+    def _toggle_automation(self, event=None):
+        """快捷键：切换启动/停止"""
+        if self.worker_thread and self.worker_thread.is_alive():
+            print('[GUI] 快捷键: 停止')
+            self._stop_automation()
+        elif self._is_multi_running():
+            print('[GUI] 快捷键: 停止多账号')
+            self.account_panel._stop_scheduler()
+        else:
+            print('[GUI] 快捷键: 启动')
+            self._start_automation()
 
     # ── 推荐配方显示 ────────────────────────────────────
 
