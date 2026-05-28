@@ -71,3 +71,10 @@ All coordinates in `departments_coords` are defined for 1920x1080 baseline, scal
 - `test1()` — enumerates all visible Windows
 - `test2()` — validates config loading and user_config updates
 - Enable `debug_mode: true` in user_config.yaml to save screenshots to `./log/`
+
+## Version History
+
+| 版本 | 提交 | 说明 |
+|------|------|------|
+| v3.2 | `890c7cd` | 原仓库最新版本 (S9 赛季) |
+| v3.3 | `f6e1b03` | 多账号制造流程重构：启动即走、阶段分组GUI、F8快捷键、可配置等待时长 |
