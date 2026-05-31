@@ -81,7 +81,7 @@ class MainWindow(tk.Tk):
         self._original_stderr = sys.stderr
 
         # ── 多标签页独立控件集合 ──
-        self.log_texts = []               # 每个 tab 有一个 log_text
+        self.log_texts = []               # 仅单账号 tab 有日志框
 
         # ── 构建界面 ──
         self._build_ui()
@@ -245,8 +245,7 @@ class MainWindow(tk.Tk):
     # ── 多账号 UI ────────────────────────────────────────
 
     def _build_multi_account_ui(self, parent):
-        parent.grid_rowconfigure(0, weight=0)  # 账号管理面板
-        parent.grid_rowconfigure(1, weight=1)  # 日志: 占满剩余
+        parent.grid_rowconfigure(0, weight=1)  # 账号管理面板占满
         parent.grid_columnconfigure(0, weight=1)
 
         # 账号管理面板
@@ -254,11 +253,6 @@ class MainWindow(tk.Tk):
         self.account_panel = AccountPanel(parent, main_window=self)
         self.account_panel.grid(row=0, column=0, sticky='nsew',
                                 padx=self.PADDING, pady=(self.PADDING, 0))
-
-        # 运行日志
-        log_frame, log_text = self._build_log_section(parent)
-        log_frame.grid(row=1, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
-        self.log_texts.append(log_text)
 
     # ── 配置加载 ────────────────────────────────────────
 
