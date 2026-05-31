@@ -4,7 +4,6 @@ Delta Force 自动制造 - GUI 主窗口
 提供：
 - 启动/停止自动化循环
 - 显示今日推荐配方及更新时间
-- 实时显示四个制造台运行状态
 - 运行日志面板
 """
 
@@ -14,7 +13,6 @@ import threading
 import queue
 import sys
 import os
-import time as time_module
 from datetime import datetime
 
 # 项目根目录
@@ -64,11 +62,6 @@ class MainWindow(tk.Tk):
         'armor': '防具台',
     }
 
-    STATUS_TEXTS = {
-        -2: '○ 空闲中',
-        -1: '✓ 已完成',
-    }
-
     def __init__(self):
         super().__init__()
 
@@ -88,7 +81,6 @@ class MainWindow(tk.Tk):
         self._original_stderr = sys.stderr
 
         # ── 多标签页独立控件集合 ──
-        self.dep_status_labels_list = []  # 每个 tab 有一套 status labels
         self.log_texts = []               # 每个 tab 有一个 log_text
 
         # ── 构建界面 ──
@@ -166,21 +158,6 @@ class MainWindow(tk.Tk):
 
     # ── 共享控件工厂 ────────────────────────────────────
 
-    def _build_status_section(self, parent):
-        """创建部门状态面板，返回 (frame, labels_dict)"""
-        frame = ttk.LabelFrame(parent, text='部门状态', padding=self.PADDING)
-        labels = {}
-        for dep in ('tech', 'work', 'medical', 'armor'):
-            row = ttk.Frame(frame)
-            row.pack(fill=tk.X, pady=1)
-            ttk.Label(row, text=f'{self.DEP_NAMES[dep]}: ', width=8).pack(side=tk.LEFT)
-            bar = ttk.Progressbar(row, length=200, mode='determinate')
-            bar.pack(side=tk.LEFT, padx=4)
-            info = ttk.Label(row, text='--', width=28)
-            info.pack(side=tk.LEFT)
-            labels[dep] = {'bar': bar, 'info': info}
-        return frame, labels
-
     def _build_log_section(self, parent):
         """创建日志面板，返回 (frame, text_widget)"""
         frame = ttk.LabelFrame(parent, text='运行日志', padding=self.PADDING)
@@ -199,8 +176,7 @@ class MainWindow(tk.Tk):
 
     def _build_single_account_ui(self, parent):
         parent.grid_rowconfigure(0, weight=0)  # 顶部: 控制+配方
-        parent.grid_rowconfigure(1, weight=0)  # 状态
-        parent.grid_rowconfigure(2, weight=1)  # 日志: 占满剩余
+        parent.grid_rowconfigure(1, weight=1)  # 日志: 占满剩余
         parent.grid_columnconfigure(0, weight=1)
 
         # ── 顶部区域（控制面板 + 推荐配方，紧凑排列） ──
@@ -261,22 +237,16 @@ class MainWindow(tk.Tk):
             label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.recipe_labels[dep] = label
 
-        # ── 部门状态 ──
-        status_frame, labels = self._build_status_section(parent)
-        status_frame.grid(row=1, column=0, sticky='ew', padx=self.PADDING, pady=(0, self.PADDING))
-        self.dep_status_labels_list.append(labels)
-
         # ── 运行日志 ──
         log_frame, log_text = self._build_log_section(parent)
-        log_frame.grid(row=2, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
+        log_frame.grid(row=1, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
         self.log_texts.append(log_text)
 
     # ── 多账号 UI ────────────────────────────────────────
 
     def _build_multi_account_ui(self, parent):
         parent.grid_rowconfigure(0, weight=0)  # 账号管理面板
-        parent.grid_rowconfigure(1, weight=0)  # 状态
-        parent.grid_rowconfigure(2, weight=1)  # 日志: 占满剩余
+        parent.grid_rowconfigure(1, weight=1)  # 日志: 占满剩余
         parent.grid_columnconfigure(0, weight=1)
 
         # 账号管理面板
@@ -285,14 +255,9 @@ class MainWindow(tk.Tk):
         self.account_panel.grid(row=0, column=0, sticky='nsew',
                                 padx=self.PADDING, pady=(self.PADDING, 0))
 
-        # 部门状态
-        status_frame, labels = self._build_status_section(parent)
-        status_frame.grid(row=1, column=0, sticky='ew', padx=self.PADDING, pady=(0, self.PADDING))
-        self.dep_status_labels_list.append(labels)
-
         # 运行日志
         log_frame, log_text = self._build_log_section(parent)
-        log_frame.grid(row=2, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
+        log_frame.grid(row=1, column=0, sticky='nsew', padx=self.PADDING, pady=(0, self.PADDING))
         self.log_texts.append(log_text)
 
     # ── 配置加载 ────────────────────────────────────────
@@ -421,10 +386,7 @@ class MainWindow(tk.Tk):
         """在工作线程中运行 main()"""
         try:
             import main as auto_module
-            auto_module.main(
-                stop_event=self.stop_event,
-                status_callback=lambda s, w: self.status_queue.put((s, w))
-            )
+            auto_module.main(stop_event=self.stop_event)
         except Exception as e:
             print(f'[ERROR] 自动化异常: {e}')
             import traceback
@@ -432,52 +394,6 @@ class MainWindow(tk.Tk):
 
         # 线程结束，通知 GUI
         self.status_queue.put(None)  # 哨兵
-
-    # ── 状态更新 ────────────────────────────────────────
-
-    def _update_status_display(self, status_data):
-        """更新部门状态面板"""
-        remain_times, wait_list_dict = status_data
-
-        dept_list = ['tech', 'work', 'medical', 'armor']
-        for dep, remain in zip(dept_list, remain_times):
-            for labels in self.dep_status_labels_list:
-                bar = labels[dep]['bar']
-                info = labels[dep]['info']
-
-                if remain == -2:
-                    bar['value'] = 0
-                    info.config(text='○ 空闲中')
-                elif remain == -1:
-                    bar['value'] = 100
-                    info.config(text='✓ 已完成')
-                else:
-                    max_val = 3600
-                    pct = min(100, int((1 - remain / max_val) * 100))
-                    bar['value'] = pct
-                    h, m = divmod(int(remain), 3600)
-                    m, s = divmod(m, 60)
-                    if h > 0:
-                        info.config(text=f'● 制造中 剩余 {h}:{m:02d}:{s:02d}')
-                    else:
-                        info.config(text=f'● 制造中 剩余 {m:02d}:{s:02d}')
-
-        # 更新状态栏
-        status_parts = []
-        for dep2, remain2 in zip(dept_list, remain_times):
-            name2 = self.DEP_NAMES.get(dep2, dep2)
-            if remain2 == -2:
-                status_parts.append(f'{name2}:空闲')
-            elif remain2 == -1:
-                status_parts.append(f'{name2}:完成')
-            else:
-                m, s = divmod(int(remain2), 60)
-                h, m = divmod(m, 60)
-                if h > 0:
-                    status_parts.append(f'{name2}:{h}h{m:02d}m')
-                else:
-                    status_parts.append(f'{name2}:{m:02d}m{s:02d}s')
-        self.status_bar.config(text=' | '.join(status_parts))
 
     def _append_log(self, text):
         """向日志框追加一行（主线程调用）"""
@@ -511,15 +427,12 @@ class MainWindow(tk.Tk):
         except queue.Empty:
             pass
 
-        # 处理状态更新
+        # 检查线程是否结束（清空队列中残留的状态数据）
         try:
             while True:
-                status = self.status_queue.get_nowait()
-                if status is None:
-                    # 哨兵：线程已结束
+                signal = self.status_queue.get_nowait()
+                if signal is None:
                     self._on_automation_stopped()
-                else:
-                    self._update_status_display(status)
         except queue.Empty:
             pass
 
@@ -532,10 +445,6 @@ class MainWindow(tk.Tk):
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
         self.status_bar.config(text='已停止')
-        for labels in self.dep_status_labels_list:
-            for dep in ['tech', 'work', 'medical', 'armor']:
-                labels[dep]['bar']['value'] = 0
-                labels[dep]['info'].config(text='--')
         self._refresh_recipe_display()
         print('=== 自动制造循环已停止 ===')
 
