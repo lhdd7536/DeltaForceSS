@@ -432,7 +432,7 @@ def department_status(dash_img, dep_coords):
             hh, mm, ss = map(int, time_str.split(':'))
             return hh * 3600 + mm * 60 + ss
         except:
-            return 30*60
+            return None  # 解析失败返回 None 而非固定 1800，避免"完成"状态被误判为"占用中"
     
     # check 设备处于空闲状态
     x, y = dep_coords['free']
@@ -495,18 +495,18 @@ def dash_page():
         for dep, coords in departments_coords['dash_page'].items():
             status.append((dep, department_status(dash_img, coords)))
         return status
-    
+
     if debug_mode:
         setup_output_directory(OUTPUT_DIR)
 
     if not is_main_page():
         raise IncorrectPageError()
-        
+
     dash_img = screenshot('gray', 'department_status')
 
     status = get_remain_times(dash_img)
-    processing_department = []
-        
+    processing_department = set()
+
     for dep, state in status:
         if state == -1:
             click_position(departments_coords['dash_page'][dep]['free'])
@@ -515,12 +515,43 @@ def dash_page():
             time.sleep(3)
             state = -2
         if state == -2 and wait_list[dep]:
-            processing_department.append(dep)
+            processing_department.add(dep)
             write_user_config(dep)
             click_position(departments_coords['dash_page'][dep]['free'])
             time.sleep(3)
             list_page(dep)
-            
+
+    # 重试轮次：某些部门可能在其他部门处理期间变为完成/空闲，或 OCR 误判导致第一轮漏处理
+    for retry in range(3):
+        time.sleep(5)
+        retry_img = screenshot('gray', 'department_status_retry')
+        retry_status = get_remain_times(retry_img)
+        has_new_work = False
+        for dep, state in retry_status:
+            if dep in processing_department:
+                continue
+            if state == -1 and wait_list[dep]:
+                # 刚完成的部门：收集并重新制造
+                click_position(departments_coords['dash_page'][dep]['free'])
+                time.sleep(3)
+                keyboard.send('space')
+                time.sleep(3)
+                click_position(departments_coords['dash_page'][dep]['free'])
+                time.sleep(3)
+                list_page(dep)
+                processing_department.add(dep)
+                has_new_work = True
+            elif state == -2 and wait_list[dep]:
+                # 刚空闲的部门：启动制造
+                write_user_config(dep)
+                click_position(departments_coords['dash_page'][dep]['free'])
+                time.sleep(3)
+                list_page(dep)
+                processing_department.add(dep)
+                has_new_work = True
+        if not has_new_work:
+            break
+
     dash_img = screenshot('gray', 'department_status')
     status = get_remain_times(dash_img)
     remain_times = []
@@ -536,7 +567,7 @@ def dash_page():
         else:
             remain_times.append(state)
             print(f'\t{dep}\t 占用中, 剩余时间:\t{state // 3600}:{(state % 3600) // 60:02d}:{state % 60:02d}')
-                
+
     return remain_times
 
 def list_page(department):

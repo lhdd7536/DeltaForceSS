@@ -7,9 +7,11 @@ WeGame 账号切换 + 游戏退出工具模块。
 
 import time
 import os
+import psutil
 import pyautogui
 pyautogui.FAILSAFE = False  # 自动化脚本中禁用角落保护，避免误触中断
 import win32gui
+import win32process
 import win32con
 import keyboard
 
@@ -73,24 +75,53 @@ def is_window_exist(class_name, title):
 
 # ── WeGame 管理 ──────────────────────────────────────
 
+def _find_wegame_hwnd():
+    """遍历窗口查找 WeGame 句柄（通过标题和进程名双重匹配）"""
+
+    # 先收集 wegame.exe 进程下的所有窗口句柄
+    wegame_pids = set()
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() == 'wegame.exe':
+                wegame_pids.add(proc.info['pid'])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    target_hwnd = []
+
+    def enum_callback(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return
+        title = win32gui.GetWindowText(hwnd)
+        # 标题匹配：wegame 关键字
+        if title and 'wegame' in title.lower():
+            target_hwnd.append(hwnd)
+            return
+        # 进程匹配：属于 wegame.exe 的可见顶级窗口
+        if wegame_pids:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if pid in wegame_pids:
+                target_hwnd.append(hwnd)
+
+    win32gui.EnumWindows(enum_callback, None)
+    if target_hwnd:
+        return target_hwnd[0]
+    return None
+
+
 def activate_wegame(wegame_path=None):
     """
     激活 WeGame 窗口。
     如果 WeGame 未运行，尝试从指定路径启动。
     返回窗口句柄，失败返回 None。
     """
-    hwnd = find_window(None, None, timeout=3)
-
-    # 遍历窗口查找 WeGame
+    # 多次尝试（带间隔），应对窗口标题在切换账号时短暂变化
     wegame_hwnd = None
-
-    def enum_callback(hwnd, _):
-        nonlocal wegame_hwnd
-        if win32gui.IsWindowVisible(hwnd):
-            title = win32gui.GetWindowText(hwnd)
-            if title and 'wegame' in title.lower():
-                wegame_hwnd = hwnd
-    win32gui.EnumWindows(enum_callback, None)
+    for _ in range(6):
+        wegame_hwnd = _find_wegame_hwnd()
+        if wegame_hwnd:
+            break
+        time.sleep(1)
 
     if wegame_hwnd:
         restore_window(wegame_hwnd)
@@ -100,20 +131,13 @@ def activate_wegame(wegame_path=None):
     # 未找到，尝试启动
     if wegame_path and os.path.exists(wegame_path):
         os.startfile(wegame_path)
-        time.sleep(5)
-        # 再次查找
-        win32gui.EnumWindows(enum_callback, None)
-        if wegame_hwnd:
-            restore_window(wegame_hwnd)
-            time.sleep(1)
-            return wegame_hwnd
-        # 如果还是没找到，给更多时间
-        time.sleep(5)
-        win32gui.EnumWindows(enum_callback, None)
-        if wegame_hwnd:
-            restore_window(wegame_hwnd)
-            time.sleep(1)
-            return wegame_hwnd
+        for _ in range(8):
+            time.sleep(2)
+            wegame_hwnd = _find_wegame_hwnd()
+            if wegame_hwnd:
+                restore_window(wegame_hwnd)
+                time.sleep(1)
+                return wegame_hwnd
 
     return None
 
