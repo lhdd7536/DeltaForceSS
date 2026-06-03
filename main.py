@@ -30,6 +30,20 @@ class IncorrectPageError(Exception):
         self.message = message
         super().__init__(self.message)
 
+
+# ── 全局停止信号 ──────────────────────────────────────
+_global_stop_event = None
+
+
+def _interruptible_sleep(seconds):
+    """可中断休眠，全局停止事件触发时立即返回 True"""
+    global _global_stop_event
+    if _global_stop_event is not None:
+        return _global_stop_event.wait(timeout=seconds)
+    time.sleep(seconds)
+    return False
+
+
 class IncorrectResolution(Exception):
     def __init__(self, message="分辨率错误"):
         self.message = message
@@ -154,18 +168,18 @@ def scroll_down_x4(position):
     for _ in range(4):
         pyautogui.scroll(-120)
         pyautogui.sleep(0.1)
-    time.sleep(1)
+    _interruptible_sleep(1)
 
 def craft(coordination):
     build_position = departments_coords['build_position']
     click_position(coordination)
-    time.sleep(1)
+    _interruptible_sleep(1)
     has_all_materials = initalize_preparation()
     if has_all_materials:
         click_position(build_position)
-        time.sleep(3)
+        _interruptible_sleep(3)
     keyboard.send('esc')
-    time.sleep(1)
+    _interruptible_sleep(1)
 
 
 # Image
@@ -374,11 +388,11 @@ def buy_material():
         if price is not None:
             if i == trial - 1:
                 keyboard.send('esc')
-                time.sleep(1)
+                _interruptible_sleep(1)
                 return -1
             # cleck price to buy
             click_position(departments_coords['price_position'])
-            time.sleep(3)
+            _interruptible_sleep(3)
         else:
             return price
     return -1
@@ -408,14 +422,14 @@ def initalize_preparation():
 
     # go to buy page
     click_position(departments_coords['buy_positions'][buy_state])
-    time.sleep(3)
+    _interruptible_sleep(3)
     price = buy_material()
     if price == -1:
         print(f'! 物品购买失败, 达到了最大尝试次数, 可能是交易行缺货')
     elif price == 0:
         print(f'! 缺少无法购买的物品, 例如高级燃料， 钛合金')
         keyboard.send('esc')
-        time.sleep(1)
+        _interruptible_sleep(1)
     buy_state = find_buy_state()
     return buy_state == -1
 
@@ -510,20 +524,26 @@ def dash_page():
     for dep, state in status:
         if state == -1:
             click_position(departments_coords['dash_page'][dep]['free'])
-            time.sleep(3)
+            if _interruptible_sleep(3):
+                return []
             keyboard.send('space')
-            time.sleep(3)
+            if _interruptible_sleep(3):
+                return []
             state = -2
         if state == -2 and wait_list[dep]:
             processing_department.add(dep)
             write_user_config(dep)
             click_position(departments_coords['dash_page'][dep]['free'])
-            time.sleep(3)
+            if _interruptible_sleep(3):
+                return []
             list_page(dep)
+            if _interruptible_sleep(0.5):
+                return []
 
     # 重试轮次：某些部门可能在其他部门处理期间变为完成/空闲，或 OCR 误判导致第一轮漏处理
     for retry in range(3):
-        time.sleep(5)
+        if _interruptible_sleep(5):
+            return []
         retry_img = screenshot('gray', 'department_status_retry')
         retry_status = get_remain_times(retry_img)
         has_new_work = False
@@ -533,20 +553,28 @@ def dash_page():
             if state == -1 and wait_list[dep]:
                 # 刚完成的部门：收集并重新制造
                 click_position(departments_coords['dash_page'][dep]['free'])
-                time.sleep(3)
+                if _interruptible_sleep(3):
+                    return []
                 keyboard.send('space')
-                time.sleep(3)
+                if _interruptible_sleep(3):
+                    return []
                 click_position(departments_coords['dash_page'][dep]['free'])
-                time.sleep(3)
+                if _interruptible_sleep(3):
+                    return []
                 list_page(dep)
+                if _interruptible_sleep(0.5):
+                    return []
                 processing_department.add(dep)
                 has_new_work = True
             elif state == -2 and wait_list[dep]:
                 # 刚空闲的部门：启动制造
                 write_user_config(dep)
                 click_position(departments_coords['dash_page'][dep]['free'])
-                time.sleep(3)
+                if _interruptible_sleep(3):
+                    return []
                 list_page(dep)
+                if _interruptible_sleep(0.5):
+                    return []
                 processing_department.add(dep)
                 has_new_work = True
         if not has_new_work:
@@ -585,6 +613,9 @@ def list_page_operation(department, category, target):
     pyautogui.moveTo(black_spot[0], black_spot[1], duration=0.3)
 
     for k in range(100):
+        if _interruptible_sleep(0.05):
+            keyboard.send('esc')
+            return
         y1 = 2
         cells = match_list_items()
         # (image, y position)
@@ -647,6 +678,9 @@ def main(stop_event=None, status_callback=None):
         stop_event: threading.Event, 设置后中断循环
         status_callback: callable, 每次迭代报告 (remain_times, wait_list) 状态
     """
+    global _global_stop_event
+    _global_stop_event = stop_event
+
     print('###### 程序初始化 ######')
     # 每天首次运行时，从 orzice.com 获取今日制造推荐
     if _HAS_FETCHER:
@@ -658,13 +692,6 @@ def main(stop_event=None, status_callback=None):
         print("[INFO] daily_fetcher 未就绪（缺少依赖？），跳过自动更新")
     background_mode = user_config['background_mode']
     hwnd = win32gui.FindWindow('UnrealWindow', '三角洲行动  ')
-
-    def _interruptible_sleep(seconds):
-        """可中断休眠，stop_event 触发时立即返回 True"""
-        if stop_event is not None:
-            return stop_event.wait(timeout=seconds)
-        time.sleep(seconds)
-        return False
 
     while stop_event is None or not stop_event.is_set():
         try:
@@ -698,7 +725,7 @@ def main(stop_event=None, status_callback=None):
                 print("用户手动停止")
                 return
 
-            remain_time = min(remain_times)
+            remain_time = min(remain_times) if remain_times else 0
             remain_time += 30     # 30 sec buffer
 
             if background_mode:
@@ -708,22 +735,17 @@ def main(stop_event=None, status_callback=None):
             low_beep()
 
             # 可中断休眠
-            if stop_event is not None:
-                if stop_event.wait(timeout=remain_time):
-                    print("用户手动停止")
-                    return
-            else:
-                time.sleep(remain_time)
+            if _interruptible_sleep(remain_time):
+                print("用户手动停止")
+                return
         except IncorrectPageError as e:
             low_beep()
             print(f'界面异常: {e}')
-            if stop_event is not None:
-                print('等待 30 秒后自动重试...')
-                if stop_event.wait(timeout=30):
-                    print("用户手动停止")
-                    return
+            if _interruptible_sleep(30):
+                print("用户手动停止")
+                return
             else:
-                input('回到特勤处制造界面后, 按 *回车* 键重试...')
+                print('等待 30 秒后自动重试...')
         except Exception as e:
             low_beep()
             print(e)

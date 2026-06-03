@@ -580,7 +580,7 @@ class AccountPanel(ttk.Frame):
                         timer.cancel()
 
                     # 计算预计完成时间
-                    max_remain = max(latest_remain_times)
+                    max_remain = max(latest_remain_times) if latest_remain_times else 0
                     if max_remain > 0:
                         from datetime import datetime, timedelta
                         est_end = datetime.now() + timedelta(seconds=max_remain)
