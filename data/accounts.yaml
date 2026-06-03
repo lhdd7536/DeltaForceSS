@@ -4,12 +4,13 @@ accounts:
   - 954
   - 632
   enabled: true
-  estimated_end: 00:36
+  estimated_end: 09:04
 - name: 小号
   click_pos:
-  - 983
-  - 678
+  - 1002
+  - 650
   enabled: true
+  estimated_end: 01:01
 wegame:
   switch_account_btn_pos:
   - 1040

@@ -659,15 +659,28 @@ def main(stop_event=None, status_callback=None):
     background_mode = user_config['background_mode']
     hwnd = win32gui.FindWindow('UnrealWindow', '三角洲行动  ')
 
+    def _interruptible_sleep(seconds):
+        """可中断休眠，stop_event 触发时立即返回 True"""
+        if stop_event is not None:
+            return stop_event.wait(timeout=seconds)
+        time.sleep(seconds)
+        return False
+
     while stop_event is None or not stop_event.is_set():
         try:
             high_beep()
-            time.sleep(1)
+            if _interruptible_sleep(1):
+                print("用户手动停止")
+                return
             if background_mode:
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                time.sleep(3)
+                if _interruptible_sleep(3):
+                    print("用户手动停止")
+                    return
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            time.sleep(6)
+            if _interruptible_sleep(6):
+                print("用户手动停止")
+                return
 
             set_screen_resolution()
             global departments_coords
@@ -681,7 +694,9 @@ def main(stop_event=None, status_callback=None):
             if status_callback:
                 status_callback(remain_times, wait_list)
 
-            time.sleep(3)
+            if _interruptible_sleep(3):
+                print("用户手动停止")
+                return
 
             remain_time = min(remain_times)
             remain_time += 30     # 30 sec buffer

@@ -600,6 +600,9 @@ class AccountPanel(ttk.Frame):
                     # 步骤 11：退出游戏（不等制造完成）
                     print(f'{name}: 步骤11 退出游戏')
                     self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
+                    if self._user_stop:
+                        print('[多账号] 用户已停止')
+                        return
 
                     # 步骤 12-13：准备下一个账号
                     try:
@@ -608,8 +611,14 @@ class AccountPanel(ttk.Frame):
                         print(f'{name}: 切换账号异常: {e}')
                         import traceback
                         traceback.print_exc()
+                    if self._user_stop:
+                        print('[多账号] 用户已停止')
+                        return
 
-                    time.sleep(3)  # 等待 WeGame 界面稳定
+                    # 等待 WeGame 界面稳定（可中断）
+                    if self._wait_check(3):
+                        print('[多账号] 用户已停止')
+                        return
 
                     print(f'{name}: 完成')
                     est = account.get('estimated_end', '')
@@ -626,10 +635,25 @@ class AccountPanel(ttk.Frame):
             self.after(0, self._on_scheduler_stopped)
 
     def _exit_game(self, exit_method):
-        """退出游戏（带超时强制结束）"""
+        """退出游戏（带超时强制结束，可被停止信号中断）"""
         try:
             wegame_switcher.exit_game(exit_method)
-            wegame_switcher.wait_game_exit(30)
+            # 轮询等待游戏退出，期间检查停止信号
+            elapsed = 0
+            timeout = 30
+            while elapsed < timeout:
+                if self._user_stop:
+                    print('[多账号] 停止信号，跳过退出等待')
+                    return
+                if not wegame_switcher.is_window_exist(
+                    wegame_switcher.GAME_CLASS, wegame_switcher.GAME_TITLE
+                ):
+                    return
+                time.sleep(1)
+                elapsed += 1
+            # 超时强制结束
+            os.system(f'taskkill /f /fi "WINDOWTITLE eq {wegame_switcher.GAME_TITLE}"')
+            time.sleep(2)
         except Exception as e:
             print(f'[多账号] 退出游戏异常: {e}')
 

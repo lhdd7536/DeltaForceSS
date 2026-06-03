@@ -5,16 +5,16 @@
 
 tech:
 # 技术中心
-  - [AUG突击步枪, -1]
+  - [SR-3M紧凑突击步枪, -1]
 work:
 # 工作台
-  - [5.45x39mm BS, -1]
+  - [9x39mm BP, -1]
 medical:
 # 制药台
-  - [精密护甲维修包, -1]
+  - [精密头盔维修包, -1]
 armor:
 # 防具台
-  - [FS复合防弹衣, -1]
+  - [重型突击背心, -1]
 TESSERACT_PATH: .\dist\Tesseract-OCR\tesseract.exe
 hotkey: f8
 background_mode: false
