@@ -671,12 +671,13 @@ def print_restart_info(remain_time):
     print(output)
     
 
-def main(stop_event=None, status_callback=None):
+def main(stop_event=None, status_callback=None, single_cycle=False):
     """自动制造主循环
 
     Args:
         stop_event: threading.Event, 设置后中断循环
         status_callback: callable, 每次迭代报告 (remain_times, wait_list) 状态
+        single_cycle: bool, 仅执行一轮 dash_page 后返回（多账号使用）
     """
     global _global_stop_event
     _global_stop_event = stop_event
@@ -721,6 +722,10 @@ def main(stop_event=None, status_callback=None):
             if status_callback:
                 status_callback(remain_times, wait_list)
 
+            if single_cycle:
+                print('单次模式：完成一轮制造检测')
+                return
+
             if _interruptible_sleep(3):
                 print("用户手动停止")
                 return
@@ -741,6 +746,8 @@ def main(stop_event=None, status_callback=None):
         except IncorrectPageError as e:
             low_beep()
             print(f'界面异常: {e}')
+            if single_cycle:
+                return
             if _interruptible_sleep(30):
                 print("用户手动停止")
                 return
@@ -749,6 +756,8 @@ def main(stop_event=None, status_callback=None):
         except Exception as e:
             low_beep()
             print(e)
+            if single_cycle:
+                return
             if stop_event is not None:
                 if status_callback:
                     status_callback([0, 0, 0, 0], {k: None for k in wait_list})

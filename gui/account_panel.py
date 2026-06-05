@@ -40,7 +40,6 @@ class AccountPanel(ttk.Frame):
         self.main_window = main_window
         self.stop_event = main_window.stop_event
         self.scheduler_thread = None
-        self._timer_fired = False
         self._user_stop = False
 
         self.accounts = []
@@ -138,13 +137,6 @@ class AccountPanel(ttk.Frame):
         self.timeout_var = tk.StringVar(value=str(self.wegame_cfg.get('account_timeout', 600)))
         self.timeout_entry = ttk.Entry(ctrl_row, width=6, textvariable=self.timeout_var)
         self.timeout_entry.pack(side=tk.LEFT)
-
-        ctrl_row2 = ttk.Frame(ctrl_frame)
-        ctrl_row2.pack(fill=tk.X, pady=2)
-        ttk.Label(ctrl_row2, text='启动制造等待(秒):').pack(side=tk.LEFT, padx=(0, 2))
-        self.start_wait_var = tk.StringVar(value=str(self.wegame_cfg.get('craft_start_wait', 180)))
-        ttk.Entry(ctrl_row2, width=6, textvariable=self.start_wait_var).pack(side=tk.LEFT, padx=1)
-        ttk.Label(ctrl_row2, text='(dash_page 一轮)').pack(side=tk.LEFT, padx=(4, 0))
 
         # 当前运行状态
         self.status_label = ttk.Label(ctrl_frame, text='就绪', foreground='gray')
@@ -357,10 +349,6 @@ class AccountPanel(ttk.Frame):
                 self.wegame_cfg['account_timeout'] = int(self.timeout_var.get())
             except ValueError:
                 pass
-            try:
-                self.wegame_cfg['craft_start_wait'] = int(self.start_wait_var.get())
-            except ValueError:
-                pass
             self._save_accounts()
             print('[多账号] WeGame 配置已保存')
         except ValueError:
@@ -517,10 +505,6 @@ class AccountPanel(ttk.Frame):
             self._load_accounts()
             accounts = [a for a in self.accounts if a.get('enabled', True)]
             wg_cfg = self.wegame_cfg
-            try:
-                start_wait = int(self.start_wait_var.get())
-            except ValueError:
-                start_wait = 180
             loop_mode = self.loop_var.get()
 
             if not accounts:
@@ -549,16 +533,11 @@ class AccountPanel(ttk.Frame):
                         self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 导航失败', foreground='red'))
                         continue
 
-                    # ── 步骤 10：启动制造（不等完成，启动即走） ──
-                    print(f'{name}: 步骤10 启动制造（等待 {start_wait} 秒用于检测并点击制造）')
+                    # ── 步骤 10：启动制造（完整一轮 dash_page，启动即走） ──
+                    print(f'{name}: 步骤10 启动制造（执行一轮完整检测，不等完成）')
                     self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 启动制造中...', foreground='blue'))
 
                     self.stop_event.clear()
-                    self._timer_fired = False
-
-                    timer = threading.Timer(start_wait, self._on_timer_fired)
-                    timer.daemon = True
-                    timer.start()
 
                     # 捕获 dash_page 返回的剩余时间，用于估计完成时间
                     latest_remain_times = [0, 0, 0, 0]
@@ -572,12 +551,11 @@ class AccountPanel(ttk.Frame):
                     try:
                         auto_module.main(
                             stop_event=self.stop_event,
-                            status_callback=_capture_callback
+                            status_callback=_capture_callback,
+                            single_cycle=True
                         )
                     except Exception as e:
                         print(f'{name}: 制造异常: {e}')
-                    finally:
-                        timer.cancel()
 
                     # 计算预计完成时间
                     max_remain = max(latest_remain_times) if latest_remain_times else 0
@@ -656,12 +634,6 @@ class AccountPanel(ttk.Frame):
             time.sleep(2)
         except Exception as e:
             print(f'[多账号] 退出游戏异常: {e}')
-
-    def _on_timer_fired(self):
-        """账号超时回调"""
-        self._timer_fired = True
-        self.stop_event.set()
-        print('[多账号] 当前账号制造时间到，准备切换')
 
     def _on_scheduler_stopped(self):
         """调度线程结束"""
