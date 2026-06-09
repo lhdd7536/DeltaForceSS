@@ -12,7 +12,10 @@ from datetime import datetime, timedelta
 import os
 import sys
 
-import yaml
+from ruamel.yaml import YAML
+_yaml_dumper = YAML()
+_yaml_dumper.indent(mapping=2, sequence=4, offset=2)
+_yaml_dumper.preserve_quotes = True
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -25,12 +28,12 @@ ACCOUNTS_FILE = os.path.join(PROJECT_ROOT, 'data', 'accounts.yaml')
 
 def _load_yaml(path):
     with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f) or {}
+        return _yaml_dumper.load(f) or {}
 
 
 def _dump_yaml(path, data):
     with open(path, 'w', encoding='utf-8') as f:
-        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        _yaml_dumper.dump(data, f)
 
 
 class AccountPanel(ttk.Frame):
@@ -427,8 +430,11 @@ class AccountPanel(ttk.Frame):
                 if self._user_stop or not self.loop_var.get():
                     return
 
-                # 弹窗确认
-                if not self._confirm_next_cycle():
+                # 弹窗确认（睡眠时间段 2:00-10:00 跳过，自动执行）
+                now_hour = datetime.now().hour
+                if 2 <= now_hour < 10:
+                    print('[多账号] 睡眠时间段，自动执行')
+                elif not self._confirm_next_cycle():
                     break
 
                 # 启动一轮制造
@@ -447,23 +453,32 @@ class AccountPanel(ttk.Frame):
             self.after(0, lambda: self.status_label.config(text='预约已停止', foreground='gray'))
             self._schedule_thread = None
 
-    def _calc_next_cycle_time(self, accounts):
-        """根据账号1的预计完成时间 + 8h 计算下次执行时间戳（降级用固定间隔）"""
-        loop_interval = int(self.wegame_cfg.get('loop_interval', 28800))
-        account1 = accounts[0] if accounts else None
-        if account1:
-            est = account1.get('estimated_end', '') or ''
+    def _get_next_run_time(self, accounts):
+        """取所有账号中最晚完成时间 + 1 分钟，返回 datetime，失败返回 None"""
+        now = datetime.now()
+        latest = None
+        for acc in accounts:
+            est = acc.get('estimated_end', '') or ''
             if est and est != '—':
                 try:
-                    est_time = datetime.strptime(est, '%H:%M')
-                    now = datetime.now()
-                    est_today = now.replace(hour=est_time.hour, minute=est_time.minute, second=0)
-                    next_dt = est_today + timedelta(hours=8)
-                    return next_dt.timestamp()
+                    t = datetime.strptime(est, '%H:%M')
+                    dt = now.replace(hour=t.hour, minute=t.minute, second=0)
+                    if latest is None or dt > latest:
+                        latest = dt
                 except ValueError:
                     pass
-        # 降级：使用固定间隔
-        return time.time() + loop_interval
+        if latest is not None:
+            latest += timedelta(minutes=1)
+            if latest <= now:
+                latest += timedelta(days=1)
+        return latest
+
+    def _calc_next_cycle_time(self, accounts):
+        """计算下次执行时间戳（降级用固定间隔）"""
+        next_dt = self._get_next_run_time(accounts)
+        if next_dt:
+            return next_dt.timestamp()
+        return time.time() + int(self.wegame_cfg.get('loop_interval', 28800))
 
     def _start_schedule_monitor(self):
         """启动预约监控线程"""
@@ -623,22 +638,11 @@ class AccountPanel(ttk.Frame):
         return False
 
     def _poll_next_cycle(self):
-        """每秒刷新下次执行时间显示（无条件显示，基于账号1完成时间+8h）"""
+        """每秒刷新下次执行时间显示"""
         next_str = None
-        if self.accounts:
-            est = self.accounts[0].get('estimated_end', '') or ''
-            if est and est != '—':
-                try:
-                    est_time = datetime.strptime(est, '%H:%M')
-                    now = datetime.now()
-                    next_dt = now.replace(hour=est_time.hour, minute=est_time.minute, second=0) + timedelta(hours=8)
-                    # 如果计算出的时间已过，进入即将执行状态
-                    if next_dt > now:
-                        next_str = next_dt.strftime('%H:%M:%S')
-                    else:
-                        next_str = '即将执行...'
-                except ValueError:
-                    pass
+        next_dt = self._get_next_run_time(self.accounts)
+        if next_dt:
+            next_str = next_dt.strftime('%H:%M:%S')
         self.next_cycle_label.config(text=f'下次执行: {next_str}' if next_str else '')
         self.after(1000, self._poll_next_cycle)
 
@@ -716,10 +720,11 @@ class AccountPanel(ttk.Frame):
                 except Exception as e:
                     print(f'{name}: 制造异常: {e}')
 
-                # 计算预计完成时间
-                max_remain = max(latest_remain_times) if latest_remain_times else 0
-                if max_remain > 0:
-                    est_end = datetime.now() + timedelta(seconds=max_remain)
+                # 计算预计完成时间（取各部门最短剩余时间）
+                valid_times = [t for t in latest_remain_times if t > 0]
+                min_remain = min(valid_times) if valid_times else 0
+                if min_remain > 0:
+                    est_end = datetime.now() + timedelta(seconds=min_remain)
                     account['estimated_end'] = est_end.strftime('%H:%M')
                     print(f'{name}: 制造启动，预计完成 {account["estimated_end"]}')
                 else:

@@ -1,47 +1,47 @@
 accounts:
-- name: 大号
-  click_pos:
-  - 954
-  - 632
-  enabled: true
-  estimated_end: '12:13'
-- name: 小号
-  click_pos:
-  - 1002
-  - 650
-  enabled: true
-  estimated_end: '12:09'
-- name: qq2
-  click_pos:
-  - 1001
-  - 679
-  enabled: true
-  estimated_end: '12:05'
+  - name: 大号
+    click_pos:
+      - 954
+      - 632
+    enabled: true
+    estimated_end: '07:03'
+  - name: 小号
+    click_pos:
+      - 1002
+      - 650
+    enabled: true
+    estimated_end: '07:06'
+  - name: qq2
+    click_pos:
+      - 1001
+      - 679
+    enabled: true
+    estimated_end: '07:10'
 wegame:
   switch_account_btn_pos:
-  - 1040
-  - 588
+    - 1040
+    - 588
   login_btn_pos:
-  - 998
-  - 704
+    - 998
+    - 704
   game_app_pos:
-  - 204
-  - 374
+    - 204
+    - 374
   launch_btn_pos:
-  - 1517
-  - 930
+    - 1517
+    - 930
   mode_btn_pos:
-  - 509
-  - 458
+    - 509
+    - 458
   dash_entry_pos:
-  - 831
-  - 58
+    - 831
+    - 58
   account_avatar_pos:
-  - 1563
-  - 87
+    - 1563
+    - 87
   switch_user_btn_pos:
-  - 1518
-  - 330
+    - 1518
+    - 330
   wait_before_app: 6
   wait_game_launch: 60
   wait_before_space: 10
