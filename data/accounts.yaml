@@ -4,13 +4,19 @@ accounts:
   - 954
   - 632
   enabled: true
-  estimated_end: 09:04
+  estimated_end: '12:13'
 - name: 小号
   click_pos:
   - 1002
   - 650
   enabled: true
-  estimated_end: 01:01
+  estimated_end: '12:09'
+- name: qq2
+  click_pos:
+  - 1001
+  - 679
+  enabled: true
+  estimated_end: '12:05'
 wegame:
   switch_account_btn_pos:
   - 1040
@@ -37,8 +43,10 @@ wegame:
   - 1518
   - 330
   wait_before_app: 6
-  wait_game_launch: 70
+  wait_game_launch: 60
   wait_before_space: 10
   craft_start_wait: 70
   exit_method: alt_f4
   account_timeout: 600
+  loop_interval: 28800
+  wegame_path: H:\wegame\wegame.exe

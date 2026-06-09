@@ -15,6 +15,9 @@ import sys
 import os
 from datetime import datetime
 
+import win32gui
+import win32con
+
 # 项目根目录
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -441,6 +444,20 @@ class MainWindow(tk.Tk):
         self.status_bar.config(text='已停止')
         self._refresh_recipe_display()
         print('=== 自动制造循环已停止 ===')
+
+    # ── 窗口管理 ───────────────────────────────────────
+
+    def bring_to_front(self):
+        """恢复窗口并置前闪烁"""
+        try:
+            hwnd = int(self.winfo_id())
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(hwnd)
+            win32gui.FlashWindow(hwnd, True)
+        except Exception:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
 
     # ── 窗口关闭 ────────────────────────────────────────
 

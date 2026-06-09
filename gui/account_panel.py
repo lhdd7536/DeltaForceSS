@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import threading
 import time
+from datetime import datetime, timedelta
 import os
 import sys
 
@@ -40,7 +41,9 @@ class AccountPanel(ttk.Frame):
         self.main_window = main_window
         self.stop_event = main_window.stop_event
         self.scheduler_thread = None
+        self._schedule_thread = None
         self._user_stop = False
+        self.next_cycle_time = None
 
         self.accounts = []
         self._load_accounts()
@@ -131,12 +134,14 @@ class AccountPanel(ttk.Frame):
         self.btn_stop.pack(side=tk.LEFT, padx=4)
 
         self.loop_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(ctrl_row, text='循环执行', variable=self.loop_var).pack(side=tk.LEFT, padx=(10, 4))
+        ttk.Checkbutton(ctrl_row, text='循环执行', variable=self.loop_var, command=self._on_loop_toggle).pack(side=tk.LEFT, padx=(10, 4))
 
-        ttk.Label(ctrl_row, text='每账号时长(秒):').pack(side=tk.LEFT, padx=(10, 2))
-        self.timeout_var = tk.StringVar(value=str(self.wegame_cfg.get('account_timeout', 600)))
-        self.timeout_entry = ttk.Entry(ctrl_row, width=6, textvariable=self.timeout_var)
-        self.timeout_entry.pack(side=tk.LEFT)
+        ttk.Label(ctrl_row, text='循环间隔(秒):').pack(side=tk.LEFT, padx=(10, 2))
+        self.loop_interval_var = tk.StringVar(value=str(self.wegame_cfg.get('loop_interval', 28800)))
+        ttk.Entry(ctrl_row, width=7, textvariable=self.loop_interval_var).pack(side=tk.LEFT)
+
+        self.next_cycle_label = ttk.Label(ctrl_row, text='', foreground='gray')
+        self.next_cycle_label.pack(side=tk.LEFT, padx=(10, 0))
 
         # 当前运行状态
         self.status_label = ttk.Label(ctrl_frame, text='就绪', foreground='gray')
@@ -239,6 +244,8 @@ class AccountPanel(ttk.Frame):
 
         # 初始化列表
         self._refresh_list()
+        # 启动下次执行时间刷新
+        self._poll_next_cycle()
 
     # ── 账号管理 ───────────────────────────────────────
 
@@ -344,11 +351,8 @@ class AccountPanel(ttk.Frame):
                 except ValueError:
                     pass
 
+            self.wegame_cfg['loop_interval'] = int(self.loop_interval_var.get())
             self.wegame_cfg['exit_method'] = self.exit_method_var.get()
-            try:
-                self.wegame_cfg['account_timeout'] = int(self.timeout_var.get())
-            except ValueError:
-                pass
             self._save_accounts()
             print('[多账号] WeGame 配置已保存')
         except ValueError:
@@ -373,7 +377,123 @@ class AccountPanel(ttk.Frame):
     def _is_running(self):
         return self.scheduler_thread is not None and self.scheduler_thread.is_alive()
 
+    @property
+    def _is_monitoring(self):
+        return self._schedule_thread is not None and self._schedule_thread.is_alive()
+
+    # ── 循环执行（预约监控） ─────────────────────────────
+
+    def _on_loop_toggle(self):
+        """循环执行复选框切换：启动/停止预约监控"""
+        if self.loop_var.get():
+            if self._is_running:
+                print('[多账号] 当前正在执行，预约将在本轮完成后生效')
+                return
+            if self._is_monitoring:
+                return
+            self._start_schedule_monitor()
+        else:
+            self._stop_schedule_monitor()
+
+    def _schedule_monitor_thread(self):
+        """预约监控：等待 → 弹窗确认 → 启动一轮 → 重复"""
+        try:
+            while self.loop_var.get() and not self._user_stop:
+                self._load_accounts()
+                accounts = [a for a in self.accounts if a.get('enabled', True)]
+                if not accounts:
+                    print('[多账号] 没有已启用的账号，预约监控退出')
+                    break
+
+                # 计算下次执行时间
+                next_ts = self._calc_next_cycle_time(accounts)
+                remaining = max(0, next_ts - time.time())
+                self.next_cycle_time = next_ts
+
+                if remaining > 1:
+                    print(f'[多账号] 预约等待：距下次执行还有 {remaining:.0f} 秒')
+                    self.after(0, lambda: self.status_label.config(text='预约等待中...', foreground='orange'))
+                    # 可中断等待，同时检测循环执行是否被取消
+                    interval = 0.5
+                    waited = 0
+                    while waited < remaining:
+                        if self._user_stop or not self.loop_var.get():
+                            return
+                        time.sleep(interval)
+                        waited += interval
+                elif remaining > 0:
+                    time.sleep(1)
+
+                if self._user_stop or not self.loop_var.get():
+                    return
+
+                # 弹窗确认
+                if not self._confirm_next_cycle():
+                    break
+
+                # 启动一轮制造
+                self._start_one_cycle()
+
+                # 等待本轮制造完成
+                while self._is_running:
+                    if self._user_stop or not self.loop_var.get():
+                        return
+                    time.sleep(1)
+
+                if self._user_stop:
+                    return
+        finally:
+            self.next_cycle_time = None
+            self.after(0, lambda: self.status_label.config(text='预约已停止', foreground='gray'))
+            self._schedule_thread = None
+
+    def _calc_next_cycle_time(self, accounts):
+        """根据账号1的预计完成时间 + 8h 计算下次执行时间戳（降级用固定间隔）"""
+        loop_interval = int(self.wegame_cfg.get('loop_interval', 28800))
+        account1 = accounts[0] if accounts else None
+        if account1:
+            est = account1.get('estimated_end', '') or ''
+            if est and est != '—':
+                try:
+                    est_time = datetime.strptime(est, '%H:%M')
+                    now = datetime.now()
+                    est_today = now.replace(hour=est_time.hour, minute=est_time.minute, second=0)
+                    next_dt = est_today + timedelta(hours=8)
+                    return next_dt.timestamp()
+                except ValueError:
+                    pass
+        # 降级：使用固定间隔
+        return time.time() + loop_interval
+
+    def _start_schedule_monitor(self):
+        """启动预约监控线程"""
+        if self._is_monitoring:
+            return
+        self._user_stop = False
+        self.stop_event.clear()
+        self._schedule_thread = threading.Thread(target=self._schedule_monitor_thread, daemon=True)
+        self._schedule_thread.start()
+        print('[多账号] 预约监控已启动')
+        self.after(0, lambda: self.status_label.config(text='预约监控中...', foreground='blue'))
+
+    def _stop_schedule_monitor(self):
+        """停止预约监控（loop_var 已由复选框置 False，监控线程自行退出）"""
+        if self._schedule_thread:
+            print('[多账号] 预约监控已停止')
+        self._schedule_thread = None
+
+    # ── 手动启动 ─────────────────────────────────────────
+
+    def _start_one_cycle(self):
+        """内部启动一轮制造（被预约监控调用）"""
+        self._user_stop = False
+        self.stop_event.clear()
+        self._set_ui_running(True)
+        self.scheduler_thread = threading.Thread(target=self._run_one_cycle, daemon=True)
+        self.scheduler_thread.start()
+
     def _start_scheduler(self):
+        """手动启动全部：立即执行一轮，停止预约监控"""
         if self._is_running:
             return
         if self.main_window.worker_thread and self.main_window.worker_thread.is_alive():
@@ -385,11 +505,14 @@ class AccountPanel(ttk.Frame):
 
         # 保存当前配置
         self._save_wg_config()
+        # 停止预约监控（取消勾选，让监控线程自行退出）
+        if self._is_monitoring:
+            self.loop_var.set(False)
 
         self._user_stop = False
         self.stop_event.clear()
         self._set_ui_running(True)
-        self.scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
+        self.scheduler_thread = threading.Thread(target=self._run_one_cycle, daemon=True)
         self.scheduler_thread.start()
         print('=== 多账号调度已启动 ===')
 
@@ -477,7 +600,7 @@ class AccountPanel(ttk.Frame):
     def _prepare_next_account(self, wg_cfg):
         """步骤 12-13：激活 WeGame → 点击当前账号头像 → 切换用户"""
         # 先激活 WeGame 窗口（游戏退出后 WeGame 可能不在前台）
-        wegame_switcher.activate_wegame()
+        wegame_switcher.activate_wegame(wg_cfg.get('wegame_path', ''))
         avatar_pos = wg_cfg.get('account_avatar_pos')
         if avatar_pos:
             print(f'步骤12 点击当前账号头像 {avatar_pos}')
@@ -499,113 +622,148 @@ class AccountPanel(ttk.Frame):
             elapsed += interval
         return False
 
-    def _run_scheduler(self):
-        """在工作线程中运行多账号调度（启动制造即走，不等完成）"""
+    def _poll_next_cycle(self):
+        """每秒刷新下次执行时间显示（无条件显示，基于账号1完成时间+8h）"""
+        next_str = None
+        if self.accounts:
+            est = self.accounts[0].get('estimated_end', '') or ''
+            if est and est != '—':
+                try:
+                    est_time = datetime.strptime(est, '%H:%M')
+                    now = datetime.now()
+                    next_dt = now.replace(hour=est_time.hour, minute=est_time.minute, second=0) + timedelta(hours=8)
+                    # 如果计算出的时间已过，进入即将执行状态
+                    if next_dt > now:
+                        next_str = next_dt.strftime('%H:%M:%S')
+                    else:
+                        next_str = '即将执行...'
+                except ValueError:
+                    pass
+        self.next_cycle_label.config(text=f'下次执行: {next_str}' if next_str else '')
+        self.after(1000, self._poll_next_cycle)
+
+    def _confirm_next_cycle(self):
+        """在主线程弹窗确认是否继续下一轮循环"""
+        result = [False]
+        event = threading.Event()
+
+        def ask():
+            self.main_window.bring_to_front()
+            result[0] = messagebox.askyesno(
+                '预约制造',
+                '下次执行时间已到，是否开始自动制造？\n\n'
+                '确认后将自动启动 WeGame 并执行多账号制造。'
+            )
+            event.set()
+
+        self.after(0, ask)
+        event.wait()
+        return result[0]
+
+    def _run_one_cycle(self):
+        """在工作线程中运行一轮多账号制造，遍历所有已启用账号后结束"""
         try:
             self._load_accounts()
             accounts = [a for a in self.accounts if a.get('enabled', True)]
             wg_cfg = self.wegame_cfg
-            loop_mode = self.loop_var.get()
 
             if not accounts:
                 print('[多账号] 没有已启用的账号')
                 return
 
-            while True:
-                for account in accounts:
-                    if self._user_stop:
-                        print('[多账号] 用户已停止')
-                        return
+            for account in accounts:
+                if self._user_stop:
+                    print('[多账号] 用户已停止')
+                    return
 
-                    name = account.get('name', '未知')
-                    print(f'=== {name}: 开始 ===')
-                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 登录中...', foreground='blue'))
+                name = account.get('name', '未知')
+                print(f'=== {name}: 开始 ===')
+                self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 登录中...', foreground='blue'))
 
-                    # 激活 WeGame
-                    if not wegame_switcher.activate_wegame():
-                        print(f'{name}: 无法找到/启动 WeGame，跳过')
-                        self.after(0, lambda n=name: self.status_label.config(text=f'{n}: WeGame 不可用', foreground='red'))
-                        continue
+                # 激活 WeGame
+                if not wegame_switcher.activate_wegame(wg_cfg.get('wegame_path', '')):
+                    print(f'{name}: 无法找到/启动 WeGame，跳过')
+                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: WeGame 不可用', foreground='red'))
+                    continue
 
-                    # 步骤 1-9：登录 + 导航到特勤处
-                    if not self._login_and_navigate(account, wg_cfg):
-                        print(f'{name}: 导航失败，跳过')
-                        self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 导航失败', foreground='red'))
-                        continue
+                # 步骤 1-9：登录 + 导航到特勤处
+                if not self._login_and_navigate(account, wg_cfg):
+                    print(f'{name}: 导航失败，跳过')
+                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 导航失败', foreground='red'))
+                    continue
 
-                    # ── 步骤 10：启动制造（完整一轮 dash_page，启动即走） ──
-                    print(f'{name}: 步骤10 启动制造（执行一轮完整检测，不等完成）')
-                    self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 启动制造中...', foreground='blue'))
+                # ── 步骤 10：启动制造（完整一轮 dash_page，启动即走） ──
+                print(f'{name}: 步骤10 启动制造（执行一轮完整检测，不等完成）')
+                self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 启动制造中...', foreground='blue'))
 
-                    self.stop_event.clear()
+                self.stop_event.clear()
 
-                    # 捕获 dash_page 返回的剩余时间，用于估计完成时间
-                    latest_remain_times = [0, 0, 0, 0]
+                # 捕获 dash_page 返回的剩余时间，用于估计完成时间
+                latest_remain_times = [0, 0, 0, 0]
 
-                    def _capture_callback(remain_times, wait_list):
-                        nonlocal latest_remain_times
-                        latest_remain_times = remain_times
-                        self.main_window.status_queue.put((remain_times, wait_list))
+                def _capture_callback(remain_times, wait_list):
+                    nonlocal latest_remain_times
+                    latest_remain_times = remain_times
+                    self.main_window.status_queue.put((remain_times, wait_list))
 
-                    import main as auto_module
-                    try:
-                        auto_module.main(
-                            stop_event=self.stop_event,
-                            status_callback=_capture_callback,
-                            single_cycle=True
-                        )
-                    except Exception as e:
-                        print(f'{name}: 制造异常: {e}')
+                import main as auto_module
+                try:
+                    auto_module.main(
+                        stop_event=self.stop_event,
+                        status_callback=_capture_callback,
+                        single_cycle=True
+                    )
+                except Exception as e:
+                    print(f'{name}: 制造异常: {e}')
 
-                    # 计算预计完成时间
-                    max_remain = max(latest_remain_times) if latest_remain_times else 0
-                    if max_remain > 0:
-                        from datetime import datetime, timedelta
-                        est_end = datetime.now() + timedelta(seconds=max_remain)
-                        account['estimated_end'] = est_end.strftime('%H:%M')
-                        print(f'{name}: 制造启动，预计完成 {account["estimated_end"]}')
-                    else:
-                        account['estimated_end'] = '—'
-                        print(f'{name}: 无需制造')
-                    self._save_accounts()
-                    self.after(0, self._refresh_list)
+                # 计算预计完成时间
+                max_remain = max(latest_remain_times) if latest_remain_times else 0
+                if max_remain > 0:
+                    est_end = datetime.now() + timedelta(seconds=max_remain)
+                    account['estimated_end'] = est_end.strftime('%H:%M')
+                    print(f'{name}: 制造启动，预计完成 {account["estimated_end"]}')
+                else:
+                    account['estimated_end'] = '—'
+                    print(f'{name}: 无需制造')
+                self._save_accounts()
+                self.after(0, self._refresh_list)
 
-                    if self._user_stop:
-                        print('[多账号] 用户已停止')
-                        self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
-                        return
-
-                    # 步骤 11：退出游戏（不等制造完成）
-                    print(f'{name}: 步骤11 退出游戏')
+                if self._user_stop:
+                    print('[多账号] 用户已停止')
                     self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
-                    if self._user_stop:
-                        print('[多账号] 用户已停止')
-                        return
+                    return
 
-                    # 步骤 12-13：准备下一个账号
-                    try:
-                        self._prepare_next_account(wg_cfg)
-                    except Exception as e:
-                        print(f'{name}: 切换账号异常: {e}')
-                        import traceback
-                        traceback.print_exc()
-                    if self._user_stop:
-                        print('[多账号] 用户已停止')
-                        return
+                # 步骤 11：退出游戏（不等制造完成）
+                print(f'{name}: 步骤11 退出游戏')
+                self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
+                if self._user_stop:
+                    print('[多账号] 用户已停止')
+                    return
 
-                    # 等待 WeGame 界面稳定（可中断）
-                    if self._wait_check(3):
-                        print('[多账号] 用户已停止')
-                        return
+                # 步骤 12-13：准备下一个账号
+                try:
+                    self._prepare_next_account(wg_cfg)
+                except Exception as e:
+                    print(f'{name}: 切换账号异常: {e}')
+                    import traceback
+                    traceback.print_exc()
+                if self._user_stop:
+                    print('[多账号] 用户已停止')
+                    return
 
-                    print(f'{name}: 完成')
-                    est = account.get('estimated_end', '')
-                    hint = f'{name}: 已完成' + (f'，预计 {est}' if est and est != '—' else '')
-                    self.after(0, lambda h=hint: self.status_label.config(text=h, foreground='green'))
+                # 等待 WeGame 界面稳定（可中断）
+                if self._wait_check(3):
+                    print('[多账号] 用户已停止')
+                    return
 
-                if not loop_mode:
-                    break
-                print('[多账号] 循环模式：所有账号已完成，重新开始')
+                print(f'{name}: 完成')
+                est = account.get('estimated_end', '')
+                hint = f'{name}: 已完成' + (f'，预计 {est}' if est and est != '—' else '')
+                self.after(0, lambda h=hint: self.status_label.config(text=h, foreground='green'))
+
+            # 所有账号处理完毕，退出 WeGame
+            print('[多账号] 本轮制造完成，退出 WeGame')
+            wegame_switcher.exit_wegame()
 
         except Exception as e:
             print(f'[多账号] 调度异常: {e}')
@@ -638,8 +796,12 @@ class AccountPanel(ttk.Frame):
     def _on_scheduler_stopped(self):
         """调度线程结束"""
         self._set_ui_running(False)
-        self.status_label.config(text='已停止', foreground='gray')
-        print('=== 多账号调度已停止 ===')
+        if self._is_monitoring:
+            self.status_label.config(text='预约等待中...', foreground='orange')
+            print('[多账号] 本轮制造完成，等待下次执行')
+        else:
+            self.status_label.config(text='已停止', foreground='gray')
+            print('=== 多账号调度已停止 ===')
         self.main_window._refresh_recipe_display()
 
 

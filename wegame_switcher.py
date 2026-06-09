@@ -109,6 +109,33 @@ def _find_wegame_hwnd():
     return None
 
 
+def _find_wegame_path():
+    """自动查找 WeGame 安装路径"""
+    # 先从正在运行的进程中获取路径
+    for proc in psutil.process_iter(['name', 'exe']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() == 'wegame.exe':
+                exe = proc.info.get('exe')
+                if exe and os.path.isfile(exe):
+                    return exe
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    # 常见安装路径
+    candidates = [
+        os.path.join(os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)'), 'Tencent', 'wegame', 'wegame.exe'),
+        os.path.join(os.environ.get('ProgramFiles', 'C:\\Program Files'), 'Tencent', 'wegame', 'wegame.exe'),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    # 遍历各盘符
+    for drive in 'DEFGH':
+        p = f'{drive}:\\Tencent\\wegame\\wegame.exe'
+        if os.path.isfile(p):
+            return p
+    return None
+
+
 def activate_wegame(wegame_path=None):
     """
     激活 WeGame 窗口。
@@ -129,6 +156,8 @@ def activate_wegame(wegame_path=None):
         return wegame_hwnd
 
     # 未找到，尝试启动
+    if not wegame_path or not os.path.exists(wegame_path):
+        wegame_path = _find_wegame_path()
     if wegame_path and os.path.exists(wegame_path):
         os.startfile(wegame_path)
         for _ in range(8):
@@ -266,3 +295,9 @@ def wait_game_exit(timeout=30):
     os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
     time.sleep(2)
     return False
+
+
+def exit_wegame():
+    """退出 WeGame 进程"""
+    os.system('taskkill /f /im wegame.exe')
+    time.sleep(1)
