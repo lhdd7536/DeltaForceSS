@@ -432,7 +432,7 @@ class AccountPanel(ttk.Frame):
 
                 # 弹窗确认（睡眠时间段 2:00-10:00 跳过，自动执行）
                 now_hour = datetime.now().hour
-                if 2 <= now_hour < 10:
+                if now_hour < 10:
                     print('[多账号] 睡眠时间段，自动执行')
                 elif not self._confirm_next_cycle():
                     break
