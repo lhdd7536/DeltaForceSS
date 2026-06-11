@@ -16,6 +16,16 @@ import win32con
 import keyboard
 
 
+# ── 随机波动休眠 ────────────────────────────────────────
+
+def _jitter_sleep(seconds):
+    """休眠（加入 ±20% 随机波动，最大 30s）"""
+    import random
+    jitter = min(seconds * 0.2, 30)
+    actual = max(0.1, seconds + random.uniform(-jitter, jitter))
+    time.sleep(actual)
+
+
 # ── 窗口标识 ──────────────────────────────────────────
 
 GAME_CLASS = 'UnrealWindow'
@@ -40,9 +50,12 @@ def scale_pos(pos):
 # ── 鼠标操作 ──────────────────────────────────────────
 
 def click_position(position):
-    """移动鼠标并点击（接受缩放前的基准坐标）"""
+    """移动鼠标并点击（接受缩放前的基准坐标），加入 ±3px 随机偏移"""
+    import random
     x, y = scale_pos(position)
-    pyautogui.moveTo(x, y, duration=0.3)
+    x += random.randint(-3, 3)
+    y += random.randint(-3, 3)
+    pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))
     pyautogui.click()
 
 
@@ -58,7 +71,7 @@ def find_window(class_name, title, timeout=0):
             return hwnd
         if timeout <= 0 or elapsed >= timeout:
             return None
-        time.sleep(interval)
+        _jitter_sleep(interval)
         elapsed += interval
 
 
@@ -148,11 +161,11 @@ def activate_wegame(wegame_path=None):
         wegame_hwnd = _find_wegame_hwnd()
         if wegame_hwnd:
             break
-        time.sleep(1)
+        _jitter_sleep(1)
 
     if wegame_hwnd:
         restore_window(wegame_hwnd)
-        time.sleep(1)
+        _jitter_sleep(1)
         return wegame_hwnd
 
     # 未找到，尝试启动
@@ -161,11 +174,11 @@ def activate_wegame(wegame_path=None):
     if wegame_path and os.path.exists(wegame_path):
         os.startfile(wegame_path)
         for _ in range(8):
-            time.sleep(2)
+            _jitter_sleep(2)
             wegame_hwnd = _find_wegame_hwnd()
             if wegame_hwnd:
                 restore_window(wegame_hwnd)
-                time.sleep(1)
+                _jitter_sleep(1)
                 return wegame_hwnd
 
     return None
@@ -176,13 +189,13 @@ def activate_wegame(wegame_path=None):
 def click_account(position):
     """在 WeGame 登录窗口点击指定账号"""
     click_position(position)
-    time.sleep(0.5)
+    _jitter_sleep(0.5)
 
 
 def click_login(login_btn_pos):
     """点击 WeGame 登录按钮"""
     click_position(login_btn_pos)
-    time.sleep(2)
+    _jitter_sleep(2)
 
 
 # ── 导航链路（步骤 1-9） ──────────────────────────────
@@ -190,57 +203,57 @@ def click_login(login_btn_pos):
 def click_account_management(pos):
     """步骤 1：点击账号管理按钮"""
     click_position(pos)
-    time.sleep(1)
+    _jitter_sleep(1)
 
 
 def click_account_avatar(pos):
     """步骤 12：点击当前账号头像（打开切换用户菜单）"""
     click_position(pos)
-    time.sleep(1)
+    _jitter_sleep(1)
 
 
 def click_game_app(pos):
     """步骤 4：在 WeGame 游戏库中点击三角洲行动应用"""
     click_position(pos)
-    time.sleep(1)
+    _jitter_sleep(1)
 
 
 def click_launch_btn(pos):
     """步骤 5：点击启动按钮"""
     click_position(pos)
-    time.sleep(2)
+    _jitter_sleep(2)
 
 
 def click_game_mode(pos):
     """步骤 6：在游戏大厅中点击烽火地带模式"""
     click_position(pos)
     print(f'  已点击烽火地带 {pos}')
-    time.sleep(1)
+    _jitter_sleep(1)
 
 
 def press_space_x3():
     """步骤 7：按 3 次空格跳过开场动画/弹窗"""
     for _ in range(3):
         keyboard.send('space')
-        time.sleep(0.5)
+        _jitter_sleep(0.5)
 
 
 def press_tab():
     """步骤 8：按 Tab 键切换 UI 焦点"""
     keyboard.send('tab')
-    time.sleep(0.5)
+    _jitter_sleep(0.5)
 
 
 def click_dash_entry(pos):
     """步骤 9：点击特勤处入口"""
     click_position(pos)
-    time.sleep(3)
+    _jitter_sleep(3)
 
 
 def click_switch_user(pos):
     """步骤 13：点击切换用户按钮"""
     click_position(pos)
-    time.sleep(2)
+    _jitter_sleep(2)
 
 
 # ── 游戏窗口 ──────────────────────────────────────────
@@ -249,7 +262,7 @@ def wait_game_window(timeout=120):
     """等待三角洲行动游戏窗口出现，返回句柄"""
     hwnd = find_window(GAME_CLASS, GAME_TITLE, timeout=timeout)
     if hwnd:
-        time.sleep(3)
+        _jitter_sleep(3)
     return hwnd
 
 
@@ -264,17 +277,22 @@ def exit_game(method='alt_f4'):
         hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
         if hwnd:
             restore_window(hwnd)
-            time.sleep(0.5)
+            _jitter_sleep(0.5)
             keyboard.send('alt+f4')
-        time.sleep(2)
+        _jitter_sleep(2)
     elif method == 'wm_close':
         hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
         if hwnd:
             win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
-        time.sleep(2)
+        _jitter_sleep(2)
     elif method == 'taskkill':
-        os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
-        time.sleep(2)
+        hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
+        if hwnd:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            os.system(f'taskkill /f /pid {pid}')
+        else:
+            os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
+        _jitter_sleep(2)
 
 
 def wait_game_exit(timeout=30):
@@ -288,16 +306,21 @@ def wait_game_exit(timeout=30):
     while elapsed < timeout:
         if not is_window_exist(GAME_CLASS, GAME_TITLE):
             return True
-        time.sleep(interval)
+        _jitter_sleep(interval)
         elapsed += interval
 
     # 超时强制结束
-    os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
-    time.sleep(2)
+    hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
+    if hwnd:
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        os.system(f'taskkill /f /pid {pid}')
+    else:
+        os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
+    _jitter_sleep(2)
     return False
 
 
 def exit_wegame():
     """退出 WeGame 进程"""
     os.system('taskkill /f /im wegame.exe')
-    time.sleep(1)
+    _jitter_sleep(1)

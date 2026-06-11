@@ -36,11 +36,14 @@ _global_stop_event = None
 
 
 def _interruptible_sleep(seconds):
-    """可中断休眠，全局停止事件触发时立即返回 True"""
+    """可中断休眠（加入 ±20% 随机波动，最大 30s），停止事件触发时立即返回 True"""
+    import random
+    jitter = min(seconds * 0.2, 30)
+    actual = max(0.1, seconds + random.uniform(-jitter, jitter))
     global _global_stop_event
     if _global_stop_event is not None:
-        return _global_stop_event.wait(timeout=seconds)
-    time.sleep(seconds)
+        return _global_stop_event.wait(timeout=actual)
+    time.sleep(actual)
     return False
 
 
@@ -160,7 +163,10 @@ def set_screen_resolution():
 
 # Mouse
 def click_position(position):
-    pyautogui.moveTo(position[0], position[1], duration=0.3)
+    import random
+    x = position[0] + random.randint(-3, 3)
+    y = position[1] + random.randint(-3, 3)
+    pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))
     pyautogui.click()
 
 def scroll_down_x4(position):
