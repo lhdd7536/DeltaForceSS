@@ -4,19 +4,19 @@ accounts:
       - 954
       - 632
     enabled: true
-    estimated_end: '23:29'
+    estimated_end: '15:56'
   - name: 小号
     click_pos:
       - 1002
       - 650
     enabled: true
-    estimated_end: '23:32'
+    estimated_end: '15:52'
   - name: qq2
     click_pos:
       - 1001
       - 679
     enabled: true
-    estimated_end: '23:35'
+    estimated_end: '15:49'
 wegame:
   switch_account_btn_pos:
     - 1040

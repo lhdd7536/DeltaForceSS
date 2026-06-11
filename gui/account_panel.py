@@ -721,7 +721,7 @@ class AccountPanel(ttk.Frame):
                     print(f'{name}: 制造异常: {e}')
 
                 # 计算预计完成时间（取各部门最短剩余时间）
-                valid_times = [t for t in latest_remain_times if t > 0]
+                valid_times = [t for t in latest_remain_times[1:] if t > 0]
                 min_remain = min(valid_times) if valid_times else 0
                 if min_remain > 0:
                     est_end = datetime.now() + timedelta(seconds=min_remain)
