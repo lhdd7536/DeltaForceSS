@@ -7,6 +7,7 @@ WeGame 账号切换 + 游戏退出工具模块。
 
 import time
 import os
+import random
 import psutil
 import pyautogui
 pyautogui.FAILSAFE = False  # 自动化脚本中禁用角落保护，避免误触中断
@@ -14,16 +15,14 @@ import win32gui
 import win32process
 import win32con
 import keyboard
+from utils import calc_jitter
 
 
 # ── 随机波动休眠 ────────────────────────────────────────
 
 def _jitter_sleep(seconds):
     """休眠（加入 ±20% 随机波动，最大 30s）"""
-    import random
-    jitter = min(seconds * 0.2, 30)
-    actual = max(0.1, seconds + random.uniform(-jitter, jitter))
-    time.sleep(actual)
+    time.sleep(calc_jitter(seconds))
 
 
 # ── 窗口标识 ──────────────────────────────────────────
@@ -51,7 +50,6 @@ def scale_pos(pos):
 
 def click_position(position):
     """移动鼠标并点击（接受缩放前的基准坐标），加入 ±3px 随机偏移"""
-    import random
     x, y = scale_pos(position)
     x += random.randint(-3, 3)
     y += random.randint(-3, 3)

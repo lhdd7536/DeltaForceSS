@@ -10,6 +10,7 @@ import time
 import keyboard
 import winsound
 import hashlib
+import random
 import win32gui, win32con
 from PIL import ImageGrab
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ from datetime import datetime
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 import ctypes
+from utils import calc_jitter
 
 try:
     from daily_fetcher import maybe_update_recipes
@@ -37,9 +39,7 @@ _global_stop_event = None
 
 def _interruptible_sleep(seconds):
     """可中断休眠（加入 ±20% 随机波动，最大 30s），停止事件触发时立即返回 True"""
-    import random
-    jitter = min(seconds * 0.2, 30)
-    actual = max(0.1, seconds + random.uniform(-jitter, jitter))
+    actual = calc_jitter(seconds)
     global _global_stop_event
     if _global_stop_event is not None:
         return _global_stop_event.wait(timeout=actual)
@@ -163,7 +163,6 @@ def set_screen_resolution():
 
 # Mouse
 def click_position(position):
-    import random
     x = position[0] + random.randint(-3, 3)
     y = position[1] + random.randint(-3, 3)
     pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))

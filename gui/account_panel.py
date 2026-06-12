@@ -8,6 +8,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import threading
 import time
+import random
+import traceback
 from datetime import datetime, timedelta
 import os
 import sys
@@ -22,16 +24,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 import pyautogui
 import wegame_switcher
-
-
-# ── 随机波动休眠 ────────────────────────────────────────
-
-def _jitter_sleep(seconds):
-    """休眠（加入 ±20% 随机波动，最大 30s）"""
-    import random
-    jitter = min(seconds * 0.2, 30)
-    actual = max(0.1, seconds + random.uniform(-jitter, jitter))
-    time.sleep(actual)
+from utils import jitter_sleep
 
 
 ACCOUNTS_FILE = os.path.join(PROJECT_ROOT, 'data', 'accounts.yaml')
@@ -56,6 +49,7 @@ class AccountPanel(ttk.Frame):
         self.stop_event = main_window.stop_event
         self.scheduler_thread = None
         self._schedule_thread = None
+        self._schedule_lock = threading.Lock()
         self._user_stop = False
         self.next_cycle_time = None
 
@@ -244,16 +238,23 @@ class AccountPanel(ttk.Frame):
         exit_row = ttk.Frame(phase4)
         exit_row.pack(fill=tk.X, pady=1)
         ttk.Label(exit_row, text='步骤11 退出方式:', width=14).pack(side=tk.LEFT)
-        self.exit_method_var = tk.StringVar(value=self.wegame_cfg.get('exit_method', 'alt_f4'))
+        self.exit_method_var = tk.StringVar(value=self.wegame_cfg.get('exit_method', 'taskkill'))
         exit_combo = ttk.Combobox(exit_row, textvariable=self.exit_method_var,
                                   values=['alt_f4', 'wm_close', 'taskkill'], width=10, state='readonly')
         exit_combo.pack(side=tk.LEFT, padx=2)
         _add_coord_row(phase4, '12', '当前头像', 'account_avatar_pos', [60, 60])
         _add_coord_row(phase4, '13', '切换用户', 'switch_user_btn_pos', [1200, 100])
 
+        # WeGame 路径
+        path_row = ttk.Frame(wg_inner)
+        ttk.Label(path_row, text='WeGame 路径:', width=14).pack(side=tk.LEFT)
+        self.wegame_path_var = tk.StringVar(value=self.wegame_cfg.get('wegame_path', ''))
+        ttk.Entry(path_row, width=50, textvariable=self.wegame_path_var).pack(side=tk.LEFT, padx=1)
+        path_row.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(4, 0))
+
         # 保存按钮
         save_row = ttk.Frame(wg_inner)
-        save_row.grid(row=2, column=0, columnspan=2, sticky='e', pady=(4, 0))
+        save_row.grid(row=4, column=0, columnspan=2, sticky='e', pady=(4, 0))
         ttk.Button(save_row, text='保存配置', command=self._save_wg_config).pack(side=tk.RIGHT)
 
         # 初始化列表
@@ -367,6 +368,7 @@ class AccountPanel(ttk.Frame):
 
             self.wegame_cfg['loop_interval'] = int(self.loop_interval_var.get())
             self.wegame_cfg['exit_method'] = self.exit_method_var.get()
+            self.wegame_cfg['wegame_path'] = self.wegame_path_var.get()
             self._save_accounts()
             print('[多账号] WeGame 配置已保存')
         except ValueError:
@@ -377,7 +379,7 @@ class AccountPanel(ttk.Frame):
         def capture():
             for i in range(3, 0, -1):
                 self.status_label.config(text=f'捕获中: {i} 秒后将鼠标移到目标位置...', foreground='blue')
-                _jitter_sleep(1)
+                jitter_sleep(1)
             x, y = pyautogui.position()
             self.after(0, lambda: entry_x.set(str(x)))
             self.after(0, lambda: entry_y.set(str(y)))
@@ -433,17 +435,17 @@ class AccountPanel(ttk.Frame):
                     while waited < remaining:
                         if self._user_stop or not self.loop_var.get():
                             return
-                        _jitter_sleep(interval)
+                        jitter_sleep(interval)
                         waited += interval
                 elif remaining > 0:
-                    _jitter_sleep(1)
+                    jitter_sleep(1)
 
                 if self._user_stop or not self.loop_var.get():
                     return
 
-                # 弹窗确认（睡眠时间段 2:00-10:00 跳过，自动执行）
+                # 弹窗确认（睡眠时间段 0:00-10:00 跳过，自动执行）
                 now_hour = datetime.now().hour
-                if now_hour < 10:
+                if now_hour <= 10:
                     print('[多账号] 睡眠时间段，自动执行')
                 elif not self._confirm_next_cycle():
                     break
@@ -455,14 +457,15 @@ class AccountPanel(ttk.Frame):
                 while self._is_running:
                     if self._user_stop or not self.loop_var.get():
                         return
-                    _jitter_sleep(1)
+                    jitter_sleep(1)
 
                 if self._user_stop:
                     return
         finally:
             self.next_cycle_time = None
             self.after(0, lambda: self.status_label.config(text='预约已停止', foreground='gray'))
-            self._schedule_thread = None
+            with self._schedule_lock:
+                self._schedule_thread = None
 
     def _get_next_run_time(self, accounts):
         """取所有账号中最晚完成时间 + 1 分钟，返回 datetime，失败返回 None"""
@@ -504,9 +507,10 @@ class AccountPanel(ttk.Frame):
 
     def _stop_schedule_monitor(self):
         """停止预约监控（loop_var 已由复选框置 False，监控线程自行退出）"""
-        if self._schedule_thread:
-            print('[多账号] 预约监控已停止')
-        self._schedule_thread = None
+        with self._schedule_lock:
+            if self._schedule_thread:
+                print('[多账号] 预约监控已停止')
+            self._schedule_thread = None
 
     # ── 手动启动 ─────────────────────────────────────────
 
@@ -600,7 +604,7 @@ class AccountPanel(ttk.Frame):
             print(f'{name}: 游戏窗口未找到，跳过')
             return False
         wegame_switcher.restore_window(hwnd)
-        _jitter_sleep(1)
+        jitter_sleep(1)
         mode_pos = wg_cfg.get('mode_btn_pos', [300, 500])
         wegame_switcher.click_game_mode(mode_pos)
         print(f'{name}: 步骤6 已点击烽火地带 {mode_pos}')
@@ -615,7 +619,7 @@ class AccountPanel(ttk.Frame):
         # 步骤 8：按 Tab 键
         print(f'{name}: 步骤8 按 Tab')
         wegame_switcher.press_tab()
-        _jitter_sleep(1)
+        jitter_sleep(1)
 
         # 步骤 9：点击特勤处
         dash_pos = wg_cfg.get('dash_entry_pos', [600, 350])
@@ -631,31 +635,28 @@ class AccountPanel(ttk.Frame):
         if avatar_pos:
             print(f'步骤12 点击当前账号头像 {avatar_pos}')
             wegame_switcher.click_account_avatar(avatar_pos)
-            _jitter_sleep(1)
+            jitter_sleep(1)
         switch_user = wg_cfg.get('switch_user_btn_pos')
         if switch_user:
             print(f'步骤13 点击切换用户 {switch_user}')
             wegame_switcher.click_switch_user(switch_user)
 
     def _wait_check(self, seconds):
-        """等待指定秒数（±20% 随机波动，最大 30s），期间检查停止信号，返回 True=应停止"""
-        import random
-        jitter = min(seconds * 0.2, 30)
-        seconds = max(0.1, seconds + random.uniform(-jitter, jitter))
+        """等待指定秒数，期间检查停止信号，返回 True=应停止"""
         interval = 0.5
         elapsed = 0
         while elapsed < seconds:
             if self._user_stop:
                 return True
-            _jitter_sleep(interval)
+            jitter_sleep(interval)
             elapsed += interval
         return False
 
     def _poll_next_cycle(self):
-        """每秒刷新下次执行时间显示"""
+        """每秒刷新下次执行时间显示（使用监控线程计算的时间）"""
         next_str = None
-        next_dt = self._get_next_run_time(self.accounts)
-        if next_dt:
+        if self.next_cycle_time:
+            next_dt = datetime.fromtimestamp(self.next_cycle_time)
             next_str = next_dt.strftime('%H:%M:%S')
         self.next_cycle_label.config(text=f'下次执行: {next_str}' if next_str else '')
         self.after(1000, self._poll_next_cycle)
@@ -749,12 +750,12 @@ class AccountPanel(ttk.Frame):
 
                 if self._user_stop:
                     print('[多账号] 用户已停止')
-                    self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
+                    self._exit_game(wg_cfg.get('exit_method', 'taskkill'))
                     return
 
                 # 步骤 11：退出游戏（不等制造完成）
                 print(f'{name}: 步骤11 退出游戏')
-                self._exit_game(wg_cfg.get('exit_method', 'alt_f4'))
+                self._exit_game(wg_cfg.get('exit_method', 'taskkill'))
                 if self._user_stop:
                     print('[多账号] 用户已停止')
                     return
@@ -764,7 +765,6 @@ class AccountPanel(ttk.Frame):
                     self._prepare_next_account(wg_cfg)
                 except Exception as e:
                     print(f'{name}: 切换账号异常: {e}')
-                    import traceback
                     traceback.print_exc()
                 if self._user_stop:
                     print('[多账号] 用户已停止')
@@ -812,7 +812,7 @@ class AccountPanel(ttk.Frame):
                     return
                 if elapsed % 5 == 0:
                     print(f'[退出游戏] 等待窗口关闭... {elapsed:.0f}/{timeout} 秒')
-                _jitter_sleep(1)
+                jitter_sleep(1)
                 elapsed += 1
             # 超时强制结束
             print(f'[退出游戏] 等待 {timeout} 秒超时，强制执行 taskkill')
@@ -885,7 +885,7 @@ class _AccountDialog(tk.Toplevel):
         def capture():
             for i in range(3, 0, -1):
                 self.capture_status.config(text=f'将在 {i} 秒后捕获，请移动鼠标...')
-                _jitter_sleep(1)
+                jitter_sleep(1)
             x, y = pyautogui.position()
             self.after(0, lambda: self.x_var.set(str(x)))
             self.after(0, lambda: self.y_var.set(str(y)))
