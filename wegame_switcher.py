@@ -214,32 +214,25 @@ def click_account(position):
     _jitter_sleep(0.5)
 
 
-def scroll_account_list(position, scroll_times=1):
-    """在 WeGame 账号列表区域滚动鼠标滚轮，scroll_times 为向下滚动次数"""
-    if scroll_times <= 0:
-        return
-    x, y = scale_pos(position)
-    pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))
-    _jitter_sleep(0.3)
-    for _ in range(scroll_times):
-        pyautogui.scroll(-120)  # 负值 = 向下滚动
-        _jitter_sleep(0.2)
-    _jitter_sleep(0.5)
-
-
 def scroll_then_click(position, scroll_times=1):
     """移动到指定位置 → 向下滚轮 N 次 → 点击（用于第4、5个账号登录）"""
     if scroll_times <= 0:
         click_position(position)
         return
     x, y = scale_pos(position)
+    x += random.randint(-3, 3)
+    y += random.randint(-3, 3)
     pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))
     _jitter_sleep(0.3)
     for _ in range(scroll_times):
         pyautogui.scroll(-120)
         _jitter_sleep(0.15)
     _jitter_sleep(0.3)
-    pyautogui.click()  # 在同一位置点击
+    # 同一位置点击（带随机偏移）
+    x2 = x + random.randint(-2, 2)
+    y2 = y + random.randint(-2, 2)
+    pyautogui.moveTo(x2, y2, duration=random.uniform(0.1, 0.3))
+    pyautogui.click()
     _jitter_sleep(0.5)
 
 

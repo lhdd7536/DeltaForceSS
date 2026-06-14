@@ -579,7 +579,7 @@ class AccountPanel(ttk.Frame):
 
         # 步骤 2：点击账号（scroll_before_click > 0 时先在同一位置向下滚动）
         click_pos = account.get('click_pos', [400, 300])
-        scroll_times = account.get('scroll_before_click', 0)
+        scroll_times = int(account.get('scroll_before_click', 0) or 0)
         if scroll_times > 0:
             print(f'{name}: 步骤2 账号列表滚轮 {scroll_times} 次后点击 {click_pos}')
             wegame_switcher.scroll_then_click(click_pos, scroll_times)
