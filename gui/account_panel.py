@@ -593,16 +593,33 @@ class AccountPanel(ttk.Frame):
         wegame_switcher.click_launch_btn(launch_pos)
 
         # 步骤 6：等待游戏加载 → 点击烽火地带模式
+        # 分两阶段：① 轮询直到窗口出现 ② 继续等待剩余时间让游戏完全加载
         wait_launch = int(wg_cfg.get('wait_game_launch', 80))
-        print(f'{name}: 步骤6 等待 {wait_launch} 秒后点击烽火地带...')
-        # 固定时长等待（可被停止信号中断）
-        if self._wait_check(wait_launch):
-            return False
-        # 等待结束后检查并激活游戏窗口
-        hwnd = wegame_switcher.find_window(wegame_switcher.GAME_CLASS, wegame_switcher.GAME_TITLE)
+        launch_start = time.time()
+        print(f'{name}: 等待游戏加载（最长 {wait_launch} 秒）...')
+        hwnd = None
+        while time.time() - launch_start < wait_launch:
+            if self._user_stop:
+                print(f'{name}: 用户停止')
+                return False
+            hwnd = wegame_switcher.find_window(wegame_switcher.GAME_CLASS, wegame_switcher.GAME_TITLE)
+            if hwnd:
+                elapsed = int(time.time() - launch_start)
+                print(f'{name}: 游戏窗口已出现（耗时 {elapsed} 秒），剩余等待游戏加载...')
+                break
+            jitter_sleep(1)
+
         if not hwnd:
             print(f'{name}: 游戏窗口未找到，跳过')
             return False
+
+        # 等满 wait_launch 总时间，让游戏加载到主菜单
+        remaining = wait_launch - int(time.time() - launch_start)
+        if remaining > 0:
+            print(f'{name}: 继续等待游戏加载（剩余 {remaining} 秒）...')
+            if self._wait_check(remaining):
+                return False
+
         wegame_switcher.restore_window(hwnd)
         jitter_sleep(1)
         mode_pos = wg_cfg.get('mode_btn_pos', [300, 500])

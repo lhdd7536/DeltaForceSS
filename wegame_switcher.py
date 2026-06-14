@@ -8,6 +8,7 @@ WeGame 账号切换 + 游戏退出工具模块。
 import time
 import os
 import random
+import ctypes
 import psutil
 import pyautogui
 pyautogui.FAILSAFE = False  # 自动化脚本中禁用角落保护，避免误触中断
@@ -16,6 +17,11 @@ import win32process
 import win32con
 import keyboard
 from utils import calc_jitter
+
+# user32 API：SwitchToThisWindow 不受前台窗口权限限制
+_user32 = ctypes.windll.user32
+_SwitchToThisWindow = _user32.SwitchToThisWindow
+_SwitchToThisWindow.argtypes = [ctypes.c_int, ctypes.c_bool]
 
 
 # ── 随机波动休眠 ────────────────────────────────────────
@@ -60,23 +66,41 @@ def click_position(position):
 # ── 窗口操作 ──────────────────────────────────────────
 
 def find_window(class_name, title, timeout=0):
-    """查找窗口，可选超时轮询（间隔 0.5 秒）"""
+    """查找窗口，可选超时轮询（间隔 0.5 秒）。超时后用 EnumWindows 模糊匹配标题。"""
     elapsed = 0
     interval = 0.5
     while True:
         hwnd = win32gui.FindWindow(class_name, title)
         if hwnd:
             return hwnd
-        if timeout <= 0 or elapsed >= timeout:
-            return None
-        _jitter_sleep(interval)
-        elapsed += interval
+        if timeout > 0 and elapsed < timeout:
+            _jitter_sleep(interval)
+            elapsed += interval
+            continue
+        break
+
+    # 超时降级：遍历窗口，模糊匹配标题（容错标题末尾空格等细微差异）
+    targets = []
+    def enum_callback(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return True
+        if class_name:
+            actual_class = win32gui.GetClassName(hwnd)
+            if actual_class != class_name:
+                return True
+        actual_title = win32gui.GetWindowText(hwnd)
+        if title and title.strip() and title.strip() in actual_title:
+            targets.append(hwnd)
+        return True
+
+    win32gui.EnumWindows(enum_callback, None)
+    return targets[0] if targets else None
 
 
 def restore_window(hwnd):
-    """恢复并前置窗口"""
+    """恢复并前置窗口（使用 SwitchToThisWindow 绕过前台窗口权限限制）"""
     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-    win32gui.SetForegroundWindow(hwnd)
+    _SwitchToThisWindow(hwnd, True)
 
 
 def is_window_exist(class_name, title):

@@ -15,16 +15,16 @@ Delta Force 三角洲行动 自动化制造脚本。通过截图 → OCR 文字�
 
 ## 运行方式
 
-### GUI 模式（推荐）
+### 默认启动：GUI 模式
 
 ```bash
 set PYTHONIOENCODING=utf-8
 D:/Anaconda3/envs/deltaforce/python.exe gui/app.py
 ```
 
-GUI 基于 tkinter，提供启动/停止控制、实时部门状态、运行日志、今日推荐配方显示。
+GUI 基于 tkinter，提供启动/停止控制、实时部门状态、运行日志、今日推荐配方显示。**默认启动方式，直接运行即可。**
 
-### 后台 CLI 模式
+### 后台 CLI 模式（仅调试用）
 
 ```bash
 set PYTHONIOENCODING=utf-8
