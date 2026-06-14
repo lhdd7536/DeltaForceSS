@@ -87,7 +87,8 @@ class AccountPanel(ttk.Frame):
             pos = acc.get('click_pos', [0, 0])
             pos_str = f'{pos[0]}, {pos[1]}'
             end_time = acc.get('estimated_end', '') or ''
-            self.tree.insert('', tk.END, values=(i, acc.get('name', ''), pos_str, enabled, end_time),
+            scroll = acc.get('scroll_before_click', 0)
+            self.tree.insert('', tk.END, values=(i, acc.get('name', ''), pos_str, scroll, enabled, end_time),
                              tags=('disabled',) if not acc.get('enabled', True) else ())
 
     # ── 构建界面 ───────────────────────────────────────
@@ -97,17 +98,19 @@ class AccountPanel(ttk.Frame):
         list_frame = ttk.LabelFrame(self, text='账号列表', padding=4)
         list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
-        columns = ('#', '名称', '坐标', '启用', '完成时间')
+        columns = ('#', '名称', '坐标', '滚轮', '启用', '完成时间')
         self.tree = ttk.Treeview(list_frame, columns=columns, show='headings',
                                  height=8, selectmode='browse')
         self.tree.heading('#', text='#')
         self.tree.heading('名称', text='名称')
         self.tree.heading('坐标', text='坐标')
+        self.tree.heading('滚轮', text='滚轮')
         self.tree.heading('启用', text='启用')
         self.tree.heading('完成时间', text='完成时间')
         self.tree.column('#', width=30, anchor=tk.CENTER)
         self.tree.column('名称', width=120)
         self.tree.column('坐标', width=110, anchor=tk.CENTER)
+        self.tree.column('滚轮', width=50, anchor=tk.CENTER)
         self.tree.column('启用', width=50, anchor=tk.CENTER)
         self.tree.column('完成时间', width=80, anchor=tk.CENTER)
         self.tree.tag_configure('disabled', foreground='gray')
@@ -268,10 +271,11 @@ class AccountPanel(ttk.Frame):
         """添加账号"""
         dialog = _AccountDialog(self, title='添加账号')
         if dialog.result:
-            name, click_pos = dialog.result
+            name, click_pos, scroll = dialog.result
             self.accounts.append({
                 'name': name,
                 'click_pos': click_pos,
+                'scroll_before_click': scroll,
                 'enabled': True,
             })
             self._save_accounts()
@@ -286,11 +290,15 @@ class AccountPanel(ttk.Frame):
         idx = self.tree.index(sel[0])
         acc = self.accounts[idx]
 
-        dialog = _AccountDialog(self, title='编辑账号', name=acc['name'], click_pos=acc.get('click_pos', [0, 0]))
+        dialog = _AccountDialog(self, title='编辑账号',
+                                name=acc['name'],
+                                click_pos=acc.get('click_pos', [0, 0]),
+                                scroll_before_click=acc.get('scroll_before_click', 0))
         if dialog.result:
-            name, click_pos = dialog.result
+            name, click_pos, scroll = dialog.result
             self.accounts[idx]['name'] = name
             self.accounts[idx]['click_pos'] = click_pos
+            self.accounts[idx]['scroll_before_click'] = scroll
             self._save_accounts()
             self._refresh_list()
 
@@ -569,10 +577,15 @@ class AccountPanel(ttk.Frame):
             print(f'{name}: 步骤1 点击切换账号 {switch_btn}')
             wegame_switcher.click_account_management(switch_btn)
 
-        # 步骤 2：点击账号
+        # 步骤 2：点击账号（scroll_before_click > 0 时先在同一位置向下滚动）
         click_pos = account.get('click_pos', [400, 300])
-        print(f'{name}: 步骤2 点击账号 {click_pos}')
-        wegame_switcher.click_account(click_pos)
+        scroll_times = account.get('scroll_before_click', 0)
+        if scroll_times > 0:
+            print(f'{name}: 步骤2 账号列表滚轮 {scroll_times} 次后点击 {click_pos}')
+            wegame_switcher.scroll_then_click(click_pos, scroll_times)
+        else:
+            print(f'{name}: 步骤2 点击账号 {click_pos}')
+            wegame_switcher.click_account(click_pos)
 
         # 步骤 3：点击登录按钮
         login_pos = wg_cfg.get('login_btn_pos', [960, 640])
@@ -857,13 +870,14 @@ class AccountPanel(ttk.Frame):
 class _AccountDialog(tk.Toplevel):
     """添加/编辑账号的模态对话框"""
 
-    def __init__(self, parent, title='账号', name='', click_pos=None):
+    def __init__(self, parent, title='账号', name='', click_pos=None, scroll_before_click=0):
         super().__init__(parent)
         self.title(title)
         self.resizable(False, False)
         self.result = None
 
         self._click_pos = click_pos or [0, 0]
+        self._scroll_before_click = scroll_before_click
 
         frame = ttk.Frame(self, padding=12)
         frame.pack(fill=tk.BOTH, expand=True)
@@ -887,9 +901,14 @@ class _AccountDialog(tk.Toplevel):
         self.capture_status = ttk.Label(frame, text='', foreground='gray')
         self.capture_status.grid(row=3, column=0, columnspan=3, pady=(0, 4))
 
+        # 向下滚轮次数（第4个账号需要滚1次，第5个需要滚2次）
+        ttk.Label(frame, text='向下滚轮次数:').grid(row=4, column=0, sticky=tk.W, pady=4)
+        self.scroll_var = tk.StringVar(value=str(self._scroll_before_click))
+        ttk.Spinbox(frame, from_=0, to=10, width=8, textvariable=self.scroll_var).grid(row=4, column=1, sticky=tk.W, pady=4)
+
         # 按钮
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=4, column=0, columnspan=3, pady=(8, 0))
+        btn_row.grid(row=5, column=0, columnspan=3, pady=(8, 0))
         ttk.Button(btn_row, text='确定', command=self._ok).pack(side=tk.LEFT, padx=4)
         ttk.Button(btn_row, text='取消', command=self.destroy).pack(side=tk.LEFT, padx=4)
 
@@ -918,8 +937,9 @@ class _AccountDialog(tk.Toplevel):
         try:
             x = int(self.x_var.get())
             y = int(self.y_var.get())
+            scroll = int(self.scroll_var.get())
         except ValueError:
-            messagebox.showerror('错误', '坐标必须为数字', parent=self)
+            messagebox.showerror('错误', '坐标和滚轮次数必须为数字', parent=self)
             return
-        self.result = (name, [x, y])
+        self.result = (name, [x, y], scroll)
         self.destroy()

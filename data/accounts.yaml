@@ -4,19 +4,38 @@ accounts:
       - 1008
       - 624
     enabled: true
-    estimated_end: '01:35'
+    estimated_end: '20:29'
+    scroll_before_click: 0
   - name: 小号
     click_pos:
       - 1005
       - 662
     enabled: true
-    estimated_end: '01:39'
+    estimated_end: '18:42'
+    scroll_before_click: 0
   - name: qq2
     click_pos:
       - 1015
       - 691
     enabled: true
-    estimated_end: '01:44'
+    estimated_end: '20:23'
+    scroll_before_click: 0
+  # 第4个账号：先向下滚轮1次再点击（位置同第3个账号）
+  - name: 账号4
+    click_pos:
+      - 1015
+      - 691
+    enabled: true
+    estimated_end: '00:41'
+    scroll_before_click: 1
+  # 第5个账号：先向下滚轮2次再点击（位置同第3个账号）
+  - name: 账号5
+    click_pos:
+      - 1015
+      - 691
+    enabled: false
+    estimated_end: ''
+    scroll_before_click: 2
 wegame:
   switch_account_btn_pos:
     - 1043
