@@ -171,9 +171,59 @@ def _find_wegame_path():
     return None
 
 
+def dismiss_game_input_overlay():
+    """
+    检测并消除 GameInputServiceWindow 覆盖层。
+    游戏退出后 WeGame 的输入服务覆盖层可能留在前台，阻挡后续点击。
+    返回消除的覆盖层数量。
+    """
+    dismissed = 0
+    try:
+        for _ in range(3):  # 重试最多 3 次，应对覆盖层被重建
+            # 查找所有 GameInputServiceWindow 实例
+            overlay_hwnds = []
+            def _enum_overlay(h, _):
+                if win32gui.IsWindowVisible(h):
+                    c = win32gui.GetClassName(h)
+                    if c == 'GameInputServiceWindow':
+                        overlay_hwnds.append(h)
+                return True
+            win32gui.EnumWindows(_enum_overlay, None)
+
+            if not overlay_hwnds:
+                if dismissed > 0:
+                    print(f'[wegame] 所有 {dismissed} 个覆盖层已消除')
+                return dismissed
+
+            if dismissed == 0:
+                print(f'[wegame] 检测到 {len(overlay_hwnds)} 个 GameInputServiceWindow 覆盖层')
+
+            for hwnd in overlay_hwnds:
+                try:
+                    if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
+                        continue
+
+                    # 最小化覆盖层到任务栏（SW_HIDE 会被 WeGame 重建，SW_MINIMIZE 只是缩小）
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                    _jitter_sleep(0.3)
+                    dismissed += 1
+                except Exception:
+                    pass
+
+            # 短等后检查是否被重建
+            _jitter_sleep(0.5)
+
+    except Exception as e:
+        print(f'[wegame] 处理覆盖层异常: {e}')
+
+    if dismissed > 0:
+        print(f'[wegame] 已消除 {dismissed} 个覆盖层')
+    return dismissed
+
+
 def activate_wegame(wegame_path=None):
     """
-    激活 WeGame 窗口。
+    确保 WeGame 在运行并返回窗口句柄（不强制置顶前台）。
     如果 WeGame 未运行，尝试从指定路径启动。
     返回窗口句柄，失败返回 None。
     """
@@ -186,8 +236,9 @@ def activate_wegame(wegame_path=None):
         _jitter_sleep(1)
 
     if wegame_hwnd:
+        # 恢复窗口（如果最小化），但不强制置顶（覆盖层透明，不挡点击）
         restore_window(wegame_hwnd)
-        _jitter_sleep(1)
+        _jitter_sleep(0.5)
         return wegame_hwnd
 
     # 未找到，尝试启动
@@ -312,10 +363,25 @@ def wait_game_window(timeout=120):
 
 # ── 退出游戏 ──────────────────────────────────────────
 
+def _check_game_input_overlay():
+    """调试：检测 GameInputServiceWindow 覆盖层是否存在"""
+    try:
+        hwnd = win32gui.FindWindow('GameInputServiceWindow', None)
+        if hwnd and win32gui.IsWindowVisible(hwnd):
+            title = win32gui.GetWindowText(hwnd)
+            print(f'  [dbg] GameInputServiceWindow 覆盖层存在: "{title}" hwnd={hwnd}')
+        return hwnd
+    except Exception:
+        return None
+
+
 def exit_game(method='alt_f4'):
     """退出三角洲行动游戏"""
     if not is_window_exist(GAME_CLASS, GAME_TITLE):
         return
+
+    # 记录退出前的覆盖层状态
+    _check_game_input_overlay()
 
     if method == 'alt_f4':
         hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
