@@ -23,6 +23,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 import pyautogui
+import win32gui
 import wegame_switcher
 from utils import jitter_sleep
 
@@ -570,6 +571,16 @@ class AccountPanel(ttk.Frame):
 
     # ── 调度逻辑（13 步完整流程） ──────────────────────────
 
+    def _debug_fg_window(self, tag=''):
+        """调试：记录当前前台窗口标题"""
+        try:
+            hwnd = win32gui.GetForegroundWindow()
+            title = win32gui.GetWindowText(hwnd)
+            cls = win32gui.GetClassName(hwnd)
+            print(f'  [dbg] {tag} 前台窗口: "{title}" class={cls}')
+        except Exception as e:
+            print(f'  [dbg] {tag} 获取前台窗口失败: {e}')
+
     def _login_and_navigate(self, account, wg_cfg):
         """步骤 1-9：完整登录导航流程，成功返回 True"""
         name = account.get('name', '未知')
@@ -594,19 +605,24 @@ class AccountPanel(ttk.Frame):
         login_pos = wg_cfg.get('login_btn_pos', [960, 640])
         print(f'{name}: 步骤3 点击登录 {login_pos}')
         wegame_switcher.click_login(login_pos)
+        self._debug_fg_window('步骤3-登录后')
 
         # 步骤 4：等待 → 点击三角洲行动应用
         wait_before_app = int(wg_cfg.get('wait_before_app', 6))
         print(f'{name}: 步骤4 等待 {wait_before_app} 秒后点击三角洲应用...')
         if self._wait_check(wait_before_app):
             return False
+        self._debug_fg_window('步骤4-点击应用前')
         game_pos = wg_cfg.get('game_app_pos', [150, 400])
         wegame_switcher.click_game_app(game_pos)
+        self._debug_fg_window('步骤4-点击应用后')
 
         # 步骤 5：点击启动按钮
         launch_pos = wg_cfg.get('launch_btn_pos', [960, 800])
         print(f'{name}: 步骤5 点击启动 {launch_pos}')
+        self._debug_fg_window('步骤5前')
         wegame_switcher.click_launch_btn(launch_pos)
+        self._debug_fg_window('步骤5后')
 
         # 步骤 6：等待游戏加载 → 点击烽火地带模式
         # 分两阶段：① 轮询直到窗口出现 ② 继续等待剩余时间让游戏完全加载
@@ -623,10 +639,23 @@ class AccountPanel(ttk.Frame):
                 elapsed = int(time.time() - launch_start)
                 print(f'{name}: 游戏窗口已出现（耗时 {elapsed} 秒），剩余等待游戏加载...')
                 break
+            # 调试：每 5 秒记录一次前台窗口
+            elapsed = int(time.time() - launch_start)
+            if elapsed > 0 and elapsed % 5 == 0:
+                self._debug_fg_window(f'等待游戏第{elapsed}秒')
             jitter_sleep(1)
 
         if not hwnd:
             print(f'{name}: 游戏窗口未找到，跳过')
+            self._debug_fg_window(f'超时{wait_launch}秒后')
+            # 枚举所有可见窗口辅助排查
+            def _enum_all(h, _):
+                if win32gui.IsWindowVisible(h):
+                    t = win32gui.GetWindowText(h)
+                    c = win32gui.GetClassName(h)
+                    if t.strip():
+                        print(f'  [dbg] 可见窗口: "{t}" class={c}')
+            win32gui.EnumWindows(_enum_all, None)
             return False
 
         # 等满 wait_launch 总时间，让游戏加载到主菜单
@@ -640,7 +669,9 @@ class AccountPanel(ttk.Frame):
         jitter_sleep(1)
         mode_pos = wg_cfg.get('mode_btn_pos', [300, 500])
         wegame_switcher.click_game_mode(mode_pos)
-        print(f'{name}: 步骤6 已点击烽火地带 {mode_pos}')
+        jitter_sleep(1)
+        wegame_switcher.click_game_mode(mode_pos)
+        print(f'{name}: 步骤6 已双击烽火地带 {mode_pos}')
 
         # 步骤 7：等待 → 按 3 次空格跳过动画
         wait_space = int(wg_cfg.get('wait_before_space', 10))
@@ -664,15 +695,31 @@ class AccountPanel(ttk.Frame):
         """步骤 12-13：激活 WeGame → 点击当前账号头像 → 切换用户"""
         # 先激活 WeGame 窗口（游戏退出后 WeGame 可能不在前台）
         wegame_switcher.activate_wegame(wg_cfg.get('wegame_path', ''))
+        self._debug_fg_window('步骤12-激活WeGame后')
         avatar_pos = wg_cfg.get('account_avatar_pos')
         if avatar_pos:
             print(f'步骤12 点击当前账号头像 {avatar_pos}')
             wegame_switcher.click_account_avatar(avatar_pos)
             jitter_sleep(1)
+            self._debug_fg_window('步骤12-点击头像后')
         switch_user = wg_cfg.get('switch_user_btn_pos')
         if switch_user:
             print(f'步骤13 点击切换用户 {switch_user}')
             wegame_switcher.click_switch_user(switch_user)
+            self._debug_fg_window('步骤13-点击切换用户后')
+            # 等待 WeGame 窗口稳定（GameInputServiceWindow 短暂抢前台后要恢复）
+            WEGAME_TITLE = 'WeGame'
+            WEGAME_CLASS = 'CefTopWindow'
+            for _ in range(10):
+                fg = win32gui.GetForegroundWindow()
+                title = win32gui.GetWindowText(fg)
+                cls = win32gui.GetClassName(fg)
+                if cls == WEGAME_CLASS and WEGAME_TITLE in title:
+                    self._debug_fg_window('步骤13-WeGame已恢复')
+                    break
+                jitter_sleep(0.5)
+            else:
+                print(f'  [dbg] 步骤13-等待超时，前台窗口未恢复')
 
     def _wait_check(self, seconds):
         """等待指定秒数，期间检查停止信号，返回 True=应停止"""
@@ -793,6 +840,7 @@ class AccountPanel(ttk.Frame):
                 # 步骤 11：退出游戏（不等制造完成）
                 print(f'{name}: 步骤11 退出游戏')
                 self._exit_game(wg_cfg.get('exit_method', 'taskkill'))
+                self._debug_fg_window(f'{name}-退出游戏后')
                 if self._user_stop:
                     print('[多账号] 用户已停止')
                     return
