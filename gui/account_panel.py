@@ -52,6 +52,9 @@ class AccountPanel(ttk.Frame):
         self._schedule_lock = threading.Lock()
         self._user_stop = False
         self.next_cycle_time = None
+        self._cycle_has_failure = False
+        self._retry_count = 0
+        self._max_retries = 3
 
         self.accounts = []
         self._load_accounts()
@@ -720,6 +723,8 @@ class AccountPanel(ttk.Frame):
                 print('[多账号] 没有已启用的账号')
                 return
 
+            self._cycle_has_failure = False
+
             for account in accounts:
                 if self._user_stop:
                     print('[多账号] 用户已停止')
@@ -733,12 +738,14 @@ class AccountPanel(ttk.Frame):
                 if not wegame_switcher.activate_wegame(wg_cfg.get('wegame_path', '')):
                     print(f'{name}: 无法找到/启动 WeGame，跳过')
                     self.after(0, lambda n=name: self.status_label.config(text=f'{n}: WeGame 不可用', foreground='red'))
+                    self._cycle_has_failure = True
                     continue
 
                 # 步骤 1-9：登录 + 导航到特勤处
                 if not self._login_and_navigate(account, wg_cfg):
                     print(f'{name}: 导航失败，跳过')
                     self.after(0, lambda n=name: self.status_label.config(text=f'{n}: 导航失败', foreground='red'))
+                    self._cycle_has_failure = True
                     continue
 
                 # ── 步骤 10：启动制造（完整一轮 dash_page，启动即走） ──
@@ -816,7 +823,22 @@ class AccountPanel(ttk.Frame):
 
         except Exception as e:
             print(f'[多账号] 调度异常: {e}')
+            self._cycle_has_failure = True
         finally:
+            # 预约模式下：有账号失败则自动重试（最多 _max_retries 次）
+            if (self._cycle_has_failure and self._is_monitoring and self.loop_var.get()
+                    and not self._user_stop):
+                self._retry_count += 1
+                if self._retry_count <= self._max_retries:
+                    print(f'[多账号] 有账号失败，自动重试第 {self._retry_count}/{self._max_retries} 轮...')
+                    self.after(0, lambda: self.status_label.config(
+                        text=f'自动重试 {self._retry_count}/{self._max_retries}', foreground='orange'))
+                    self._start_one_cycle()
+                    return
+                else:
+                    print(f'[多账号] 重试 {self._max_retries} 次后仍有失败，停止重试')
+            else:
+                self._retry_count = 0
             self.after(0, self._on_scheduler_stopped)
 
     def _exit_game(self, exit_method):
