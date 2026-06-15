@@ -23,7 +23,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 import pyautogui
-import win32gui
 import wegame_switcher
 from utils import jitter_sleep
 
@@ -566,31 +565,6 @@ class AccountPanel(ttk.Frame):
         self.btn_start.config(state=state)
         self.btn_stop.config(state=tk.NORMAL if running else tk.DISABLED)
 
-    # ── 调度逻辑（13 步完整流程） ──────────────────────────
-
-    def _debug_fg_window(self, tag=''):
-        """调试：记录当前前台窗口标题"""
-        try:
-            hwnd = win32gui.GetForegroundWindow()
-            title = win32gui.GetWindowText(hwnd)
-            cls = win32gui.GetClassName(hwnd)
-            print(f'  [dbg] {tag} 前台窗口: "{title}" class={cls}')
-        except Exception as e:
-            print(f'  [dbg] {tag} 获取前台窗口失败: {e}')
-
-    def _debug_window_at_pos(self, tag, pos):
-        """调试：记录指定屏幕坐标处最顶层的窗口信息"""
-        try:
-            hwnd = win32gui.WindowFromPoint((pos[0], pos[1]))
-            if hwnd:
-                title = win32gui.GetWindowText(hwnd)
-                cls = win32gui.GetClassName(hwnd)
-                print(f'  [dbg] {tag} 坐标{pos} => 窗口: "{title}" class={cls}')
-            else:
-                print(f'  [dbg] {tag} 坐标{pos} => 无窗口')
-        except Exception as e:
-            print(f'  [dbg] {tag} 获取坐标处窗口失败: {e}')
-
     def _login_and_navigate(self, account, wg_cfg):
         """步骤 1-9：完整登录导航流程，成功返回 True"""
         name = account.get('name', '未知')
@@ -812,7 +786,6 @@ class AccountPanel(ttk.Frame):
                 # 步骤 11：退出游戏（不等制造完成）
                 print(f'{name}: 步骤11 退出游戏')
                 self._exit_game(wg_cfg.get('exit_method', 'taskkill'))
-                self._debug_fg_window(f'{name}-退出游戏后')
                 if self._user_stop:
                     print('[多账号] 用户已停止')
                     return
@@ -870,29 +843,6 @@ class AccountPanel(ttk.Frame):
             else:
                 self._retry_count = 0
             self.after(0, self._on_scheduler_stopped)
-
-    def _debug_enum_windows(self, tag=''):
-        """调试：枚举所有可见窗口并输出标题+类名（含空标题窗口）"""
-        try:
-            print(f'  [dbg] {tag} 可见窗口列表:')
-            count = 0
-            overlay_count = 0
-            def _enum(h, _):
-                nonlocal count, overlay_count
-                if win32gui.IsWindowVisible(h):
-                    t = win32gui.GetWindowText(h)
-                    c = win32gui.GetClassName(h)
-                    title_display = f'"{t}"' if t.strip() else '(空标题)'
-                    print(f'  [dbg]   [{c}] {title_display}')
-                    count += 1
-                    if c == 'GameInputServiceWindow':
-                        overlay_count += 1
-                return True
-            win32gui.EnumWindows(_enum, None)
-            print(f'  [dbg] {tag} 共 {count} 个可见窗口'
-                  + (f'（其中 {overlay_count} 个 GameInputServiceWindow 覆盖层）' if overlay_count else ''))
-        except Exception as e:
-            print(f'  [dbg] 枚举窗口异常: {e}')
 
     def _exit_game(self, exit_method):
         """退出游戏（带超时强制结束，可被停止信号中断）"""

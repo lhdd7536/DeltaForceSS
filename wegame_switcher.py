@@ -200,20 +200,9 @@ def activate_wegame(wegame_path=None):
         _jitter_sleep(0.5)
         return wegame_hwnd
 
-    # 第二步：没找到窗口，检查是否有 WeGame 进程残留
-    wegame_running = False
-    for proc in psutil.process_iter(['pid', 'name']):
-        try:
-            if proc.info['name'] and proc.info['name'].lower() == 'wegame.exe':
-                wegame_running = True
-                break
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-
-    if wegame_running:
-        print('[wegame] WeGame 进程存在但无可见窗口，强制结束并重新启动')
-        exit_wegame()
-        _jitter_sleep(3)
+    # 第二步：没找到窗口 → 先杀残留进程再启动（确保干净环境）
+    exit_wegame()
+    _jitter_sleep(3)
 
     # 第三步：启动 WeGame
     if not wegame_path or not os.path.exists(wegame_path):
@@ -382,6 +371,6 @@ def wait_game_exit(timeout=30):
 
 
 def exit_wegame():
-    """退出 WeGame 进程"""
-    os.system('taskkill /f /im wegame.exe')
+    """退出 WeGame 进程（进程不存在时静默）"""
+    os.system('taskkill /f /im wegame.exe >nul 2>&1')
     _jitter_sleep(1)

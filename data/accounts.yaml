@@ -55,12 +55,6 @@ wegame:
   dash_entry_pos:
     - 831
     - 58
-  account_avatar_pos:
-    - 1563
-    - 87
-  switch_user_btn_pos:
-    - 1518
-    - 330
   wait_before_app: 6
   wait_game_launch: 52
   wait_before_space: 7
