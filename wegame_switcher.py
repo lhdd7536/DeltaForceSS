@@ -122,26 +122,28 @@ def _find_wegame_hwnd():
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
-    target_hwnd = []
+    target_hwnds = []  # 属于 wegame.exe 进程的可见窗口
 
     def enum_callback(hwnd, _):
         if not win32gui.IsWindowVisible(hwnd):
             return
-        title = win32gui.GetWindowText(hwnd)
-        # 标题匹配：wegame 关键字
-        if title and 'wegame' in title.lower():
-            target_hwnd.append(hwnd)
+        # 只匹配属于 wegame.exe 进程的窗口
+        if not wegame_pids:
             return
-        # 进程匹配：属于 wegame.exe 的可见顶级窗口
-        if wegame_pids:
-            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            if pid in wegame_pids:
-                target_hwnd.append(hwnd)
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        if pid in wegame_pids:
+            target_hwnds.append(hwnd)
 
     win32gui.EnumWindows(enum_callback, None)
-    if target_hwnd:
-        return target_hwnd[0]
-    return None
+    if not target_hwnds:
+        return None
+
+    # 优先返回到标题含 "wegame" 的窗口（主窗口），否则返回第一个
+    for hwnd in target_hwnds:
+        title = win32gui.GetWindowText(hwnd)
+        if title and 'wegame' in title.lower():
+            return hwnd
+    return target_hwnds[0]
 
 
 def _find_wegame_path():
@@ -159,6 +161,7 @@ def _find_wegame_path():
     candidates = [
         os.path.join(os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)'), 'Tencent', 'wegame', 'wegame.exe'),
         os.path.join(os.environ.get('ProgramFiles', 'C:\\Program Files'), 'Tencent', 'wegame', 'wegame.exe'),
+        'H:\\wegame\\wegame.exe',
     ]
     for p in candidates:
         if os.path.isfile(p):
@@ -171,88 +174,63 @@ def _find_wegame_path():
     return None
 
 
-def dismiss_game_input_overlay():
-    """
-    检测并消除 GameInputServiceWindow 覆盖层。
-    游戏退出后 WeGame 的输入服务覆盖层可能留在前台，阻挡后续点击。
-    返回消除的覆盖层数量。
-    """
-    dismissed = 0
-    try:
-        for _ in range(3):  # 重试最多 3 次，应对覆盖层被重建
-            # 查找所有 GameInputServiceWindow 实例
-            overlay_hwnds = []
-            def _enum_overlay(h, _):
-                if win32gui.IsWindowVisible(h):
-                    c = win32gui.GetClassName(h)
-                    if c == 'GameInputServiceWindow':
-                        overlay_hwnds.append(h)
-                return True
-            win32gui.EnumWindows(_enum_overlay, None)
-
-            if not overlay_hwnds:
-                if dismissed > 0:
-                    print(f'[wegame] 所有 {dismissed} 个覆盖层已消除')
-                return dismissed
-
-            if dismissed == 0:
-                print(f'[wegame] 检测到 {len(overlay_hwnds)} 个 GameInputServiceWindow 覆盖层')
-
-            for hwnd in overlay_hwnds:
-                try:
-                    if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
-                        continue
-
-                    # 最小化覆盖层到任务栏（SW_HIDE 会被 WeGame 重建，SW_MINIMIZE 只是缩小）
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                    _jitter_sleep(0.3)
-                    dismissed += 1
-                except Exception:
-                    pass
-
-            # 短等后检查是否被重建
-            _jitter_sleep(0.5)
-
-    except Exception as e:
-        print(f'[wegame] 处理覆盖层异常: {e}')
-
-    if dismissed > 0:
-        print(f'[wegame] 已消除 {dismissed} 个覆盖层')
-    return dismissed
-
-
 def activate_wegame(wegame_path=None):
     """
     确保 WeGame 在运行并返回窗口句柄（不强制置顶前台）。
     如果 WeGame 未运行，尝试从指定路径启动。
     返回窗口句柄，失败返回 None。
+
+    改进策略：
+    1. 先尝试查找现有窗口（快速路径）
+    2. 如果没找到窗口，但进程存在 → 先杀进程再重新启动
+    3. 如果既没进程也没窗口 → 直接启动
     """
-    # 多次尝试（带间隔），应对窗口标题在切换账号时短暂变化
+    # 第一步：尝试查找现有窗口
     wegame_hwnd = None
     for _ in range(6):
         wegame_hwnd = _find_wegame_hwnd()
         if wegame_hwnd:
+            title = win32gui.GetWindowText(wegame_hwnd)
+            print(f'[wegame] 找到现有窗口: "{title}" hwnd={wegame_hwnd}')
             break
         _jitter_sleep(1)
 
     if wegame_hwnd:
-        # 恢复窗口（如果最小化），但不强制置顶（覆盖层透明，不挡点击）
         restore_window(wegame_hwnd)
         _jitter_sleep(0.5)
         return wegame_hwnd
 
-    # 未找到，尝试启动
+    # 第二步：没找到窗口，检查是否有 WeGame 进程残留
+    wegame_running = False
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            if proc.info['name'] and proc.info['name'].lower() == 'wegame.exe':
+                wegame_running = True
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    if wegame_running:
+        print('[wegame] WeGame 进程存在但无可见窗口，强制结束并重新启动')
+        exit_wegame()
+        _jitter_sleep(3)
+
+    # 第三步：启动 WeGame
     if not wegame_path or not os.path.exists(wegame_path):
         wegame_path = _find_wegame_path()
     if wegame_path and os.path.exists(wegame_path):
+        print(f'[wegame] 启动: {wegame_path}')
         os.startfile(wegame_path)
-        for _ in range(8):
+        for _ in range(12):  # 最多等 24 秒
             _jitter_sleep(2)
             wegame_hwnd = _find_wegame_hwnd()
             if wegame_hwnd:
+                title = win32gui.GetWindowText(wegame_hwnd)
+                print(f'[wegame] 启动成功: "{title}"')
                 restore_window(wegame_hwnd)
-                _jitter_sleep(1)
+                _jitter_sleep(2)  # 启动后多等一会儿让界面稳定
                 return wegame_hwnd
+        print(f'[wegame] 启动后未检测到窗口（等待超时）')
 
     return None
 
@@ -301,12 +279,6 @@ def click_account_management(pos):
     _jitter_sleep(1)
 
 
-def click_account_avatar(pos):
-    """步骤 12：点击当前账号头像（打开切换用户菜单）"""
-    click_position(pos)
-    _jitter_sleep(1)
-
-
 def click_game_app(pos):
     """步骤 4：在 WeGame 游戏库中点击三角洲行动应用"""
     click_position(pos)
@@ -345,12 +317,6 @@ def click_dash_entry(pos):
     _jitter_sleep(3)
 
 
-def click_switch_user(pos):
-    """步骤 13：点击切换用户按钮"""
-    click_position(pos)
-    _jitter_sleep(2)
-
-
 # ── 游戏窗口 ──────────────────────────────────────────
 
 def wait_game_window(timeout=120):
@@ -363,25 +329,10 @@ def wait_game_window(timeout=120):
 
 # ── 退出游戏 ──────────────────────────────────────────
 
-def _check_game_input_overlay():
-    """调试：检测 GameInputServiceWindow 覆盖层是否存在"""
-    try:
-        hwnd = win32gui.FindWindow('GameInputServiceWindow', None)
-        if hwnd and win32gui.IsWindowVisible(hwnd):
-            title = win32gui.GetWindowText(hwnd)
-            print(f'  [dbg] GameInputServiceWindow 覆盖层存在: "{title}" hwnd={hwnd}')
-        return hwnd
-    except Exception:
-        return None
-
-
 def exit_game(method='alt_f4'):
     """退出三角洲行动游戏"""
     if not is_window_exist(GAME_CLASS, GAME_TITLE):
         return
-
-    # 记录退出前的覆盖层状态
-    _check_game_input_overlay()
 
     if method == 'alt_f4':
         hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)

@@ -239,18 +239,16 @@ class AccountPanel(ttk.Frame):
         ttk.Label(phase3, text='步骤8 按 Tab:  (自动执行)').pack(anchor=tk.W, pady=1)
         _add_coord_row(phase3, '9', '特勤处入口', 'dash_entry_pos', [600, 350])
 
-        # ── 切换阶段（步骤 11-13） ──
-        phase4 = ttk.LabelFrame(wg_inner, text='切换阶段（步骤 11-13）', padding=4)
+        # ── 退出阶段（步骤 11） ──
+        phase4 = ttk.LabelFrame(wg_inner, text='退出阶段（步骤 11）', padding=4)
         phase4.grid(row=1, column=1, sticky='nsew', padx=2, pady=2)
         exit_row = ttk.Frame(phase4)
         exit_row.pack(fill=tk.X, pady=1)
-        ttk.Label(exit_row, text='步骤11 退出方式:', width=14).pack(side=tk.LEFT)
+        ttk.Label(exit_row, text='退出方式:', width=14).pack(side=tk.LEFT)
         self.exit_method_var = tk.StringVar(value=self.wegame_cfg.get('exit_method', 'taskkill'))
         exit_combo = ttk.Combobox(exit_row, textvariable=self.exit_method_var,
                                   values=['alt_f4', 'wm_close', 'taskkill'], width=10, state='readonly')
         exit_combo.pack(side=tk.LEFT, padx=2)
-        _add_coord_row(phase4, '12', '当前头像', 'account_avatar_pos', [60, 60])
-        _add_coord_row(phase4, '13', '切换用户', 'switch_user_btn_pos', [1200, 100])
 
         # WeGame 路径
         path_row = ttk.Frame(wg_inner)
@@ -362,9 +360,8 @@ class AccountPanel(ttk.Frame):
         try:
             # 保存所有坐标字段
             coord_keys = [
-                'switch_account_btn_pos', 'account_avatar_pos',
-                'login_btn_pos', 'game_app_pos',
-                'launch_btn_pos', 'mode_btn_pos', 'dash_entry_pos', 'switch_user_btn_pos',
+                'switch_account_btn_pos', 'login_btn_pos', 'game_app_pos',
+                'launch_btn_pos', 'mode_btn_pos', 'dash_entry_pos',
             ]
             for key in coord_keys:
                 if key in self._wg_vars:
@@ -601,17 +598,13 @@ class AccountPanel(ttk.Frame):
         # 步骤 1：点击切换账号按钮（可选）
         switch_btn = wg_cfg.get('switch_account_btn_pos')
         if switch_btn:
-            self._debug_fg_window('步骤1-点击前')
-            self._debug_window_at_pos('步骤1-点击前', switch_btn)
             print(f'{name}: 步骤1 点击切换账号 {switch_btn}')
             wegame_switcher.click_account_management(switch_btn)
-            self._debug_fg_window('步骤1-点击后')
             jitter_sleep(1)
 
         # 步骤 2：点击账号（scroll_before_click > 0 时先在同一位置向下滚动）
         click_pos = account.get('click_pos', [400, 300])
         scroll_times = int(account.get('scroll_before_click', 0) or 0)
-        self._debug_window_at_pos('步骤2-点击前', click_pos)
         if scroll_times > 0:
             print(f'{name}: 步骤2 账号列表滚轮 {scroll_times} 次后点击 {click_pos}')
             wegame_switcher.scroll_then_click(click_pos, scroll_times)
@@ -621,29 +614,21 @@ class AccountPanel(ttk.Frame):
 
         # 步骤 3：点击登录按钮
         login_pos = wg_cfg.get('login_btn_pos', [960, 640])
-        self._debug_window_at_pos('步骤3-点击前', login_pos)
         print(f'{name}: 步骤3 点击登录 {login_pos}')
         wegame_switcher.click_login(login_pos)
-        self._debug_fg_window('步骤3-登录后')
 
         # 步骤 4：等待 → 点击三角洲行动应用
         wait_before_app = int(wg_cfg.get('wait_before_app', 6))
         print(f'{name}: 步骤4 等待 {wait_before_app} 秒后点击三角洲应用...')
         if self._wait_check(wait_before_app):
             return False
-        self._debug_fg_window('步骤4-点击应用前')
         game_pos = wg_cfg.get('game_app_pos', [150, 400])
-        self._debug_window_at_pos('步骤4-点击前', game_pos)
         wegame_switcher.click_game_app(game_pos)
-        self._debug_fg_window('步骤4-点击应用后')
 
         # 步骤 5：点击启动按钮
         launch_pos = wg_cfg.get('launch_btn_pos', [960, 800])
         print(f'{name}: 步骤5 点击启动 {launch_pos}')
-        self._debug_fg_window('步骤5前')
-        self._debug_window_at_pos('步骤5-点击前', launch_pos)
         wegame_switcher.click_launch_btn(launch_pos)
-        self._debug_fg_window('步骤5后')
 
         # 步骤 6：等待游戏加载 → 点击烽火地带模式
         # 分两阶段：① 轮询直到窗口出现 ② 继续等待剩余时间让游戏完全加载
@@ -660,23 +645,13 @@ class AccountPanel(ttk.Frame):
                 elapsed = int(time.time() - launch_start)
                 print(f'{name}: 游戏窗口已出现（耗时 {elapsed} 秒），剩余等待游戏加载...')
                 break
-            # 调试：每 5 秒记录一次前台窗口
             elapsed = int(time.time() - launch_start)
-            if elapsed > 0 and elapsed % 5 == 0:
-                self._debug_fg_window(f'等待游戏第{elapsed}秒')
+            if elapsed > 0 and elapsed % 10 == 0:
+                print(f'{name}: 等待游戏启动 {elapsed}/{wait_launch} 秒...')
             jitter_sleep(1)
 
         if not hwnd:
             print(f'{name}: 游戏窗口未找到，跳过')
-            self._debug_fg_window(f'超时{wait_launch}秒后')
-            # 枚举所有可见窗口辅助排查
-            def _enum_all(h, _):
-                if win32gui.IsWindowVisible(h):
-                    t = win32gui.GetWindowText(h)
-                    c = win32gui.GetClassName(h)
-                    if t.strip():
-                        print(f'  [dbg] 可见窗口: "{t}" class={c}')
-            win32gui.EnumWindows(_enum_all, None)
             return False
 
         # 等满 wait_launch 总时间，让游戏加载到主菜单
@@ -711,37 +686,6 @@ class AccountPanel(ttk.Frame):
         print(f'{name}: 步骤9 点击特勤处 {dash_pos}')
         wegame_switcher.click_dash_entry(dash_pos)
         return True
-
-    def _prepare_next_account(self, wg_cfg):
-        """步骤 12-13：最小化覆盖层 → 点击当前账号头像 → 切换用户"""
-        # 枚举最小化前的窗口状态
-        self._debug_enum_windows('步骤12-最小化前')
-
-        # 最小化覆盖层（不触发 WeGame 窗口操作，避免覆盖层重建）
-        overlay_count = wegame_switcher.dismiss_game_input_overlay()
-        if overlay_count > 0:
-            self._debug_enum_windows('步骤12-最小化后')
-
-        self._debug_fg_window('步骤12-最小化后')
-
-        avatar_pos = wg_cfg.get('account_avatar_pos')
-        if avatar_pos:
-            print(f'步骤12 点击当前账号头像 {avatar_pos}')
-            self._debug_window_at_pos('步骤12-点击前', avatar_pos)
-            wegame_switcher.click_account_avatar(avatar_pos)
-            jitter_sleep(1)
-            self._debug_fg_window('步骤12-点击头像后')
-            self._debug_window_at_pos('步骤12-点击后', avatar_pos)
-
-        switch_user = wg_cfg.get('switch_user_btn_pos')
-        if switch_user:
-            print(f'步骤13 点击切换用户 {switch_user}')
-            self._debug_window_at_pos('步骤13-点击前', switch_user)
-            wegame_switcher.click_switch_user(switch_user)
-            self._debug_fg_window('步骤13-点击切换用户后')
-            self._debug_window_at_pos('步骤13-点击后', switch_user)
-            # 等界面稳定（不依赖前台窗口判断）
-            jitter_sleep(3)
 
     def _wait_check(self, seconds):
         """等待指定秒数，期间检查停止信号，返回 True=应停止"""
@@ -810,6 +754,12 @@ class AccountPanel(ttk.Frame):
                     self._cycle_has_failure = True
                     continue
 
+                # 等待 WeGame 界面稳定（刚启动/还原后需要时间渲染）
+                print(f'{name}: WeGame 已激活，等待界面稳定...')
+                if self._wait_check(3):
+                    print('[多账号] 用户已停止')
+                    return
+
                 # 步骤 1-9：登录 + 导航到特勤处
                 if not self._login_and_navigate(account, wg_cfg):
                     print(f'{name}: 导航失败，跳过')
@@ -867,17 +817,9 @@ class AccountPanel(ttk.Frame):
                     print('[多账号] 用户已停止')
                     return
 
-                # 步骤 12-13：准备下一个账号
-                try:
-                    self._prepare_next_account(wg_cfg)
-                except Exception as e:
-                    print(f'{name}: 切换账号异常: {e}')
-                    traceback.print_exc()
-                if self._user_stop:
-                    print('[多账号] 用户已停止')
-                    return
-
-                # 等待 WeGame 界面稳定（可中断）
+                # 退出 WeGame，下个账号循环会重新启动全新 WeGame
+                print(f'{name}: 退出 WeGame，为下个账号做准备...')
+                wegame_switcher.exit_wegame()
                 if self._wait_check(3):
                     print('[多账号] 用户已停止')
                     return
@@ -969,20 +911,10 @@ class AccountPanel(ttk.Frame):
                     print('[多账号] 停止信号，跳过退出等待')
                     return
 
-                # 每轮记录前台窗口变化
-                if elapsed % 3 == 0:
-                    hwnd = win32gui.GetForegroundWindow()
-                    t = win32gui.GetWindowText(hwnd)
-                    c = win32gui.GetClassName(hwnd)
-                    print(f'  [dbg] 退出等待第{elapsed}秒 前台: "{t}" class={c}')
-
                 if not wegame_switcher.is_window_exist(
                     wegame_switcher.GAME_CLASS, wegame_switcher.GAME_TITLE
                 ):
                     print(f'[退出游戏] 窗口已关闭（耗时 {elapsed:.0f} 秒）')
-                    # 窗口关闭后立即记录前台窗口和所有可见窗口
-                    self._debug_fg_window('游戏窗口关闭后')
-                    self._debug_enum_windows('游戏窗口关闭后')
                     return
                 if elapsed % 5 == 0:
                     print(f'[退出游戏] 等待窗口关闭... {elapsed:.0f}/{timeout} 秒')
@@ -994,7 +926,6 @@ class AccountPanel(ttk.Frame):
             still_exist = wegame_switcher.is_window_exist(
                 wegame_switcher.GAME_CLASS, wegame_switcher.GAME_TITLE)
             print(f'[退出游戏] taskkill 后窗口仍然存在={still_exist}')
-            self._debug_enum_windows('taskkill后')
         except Exception as e:
             print(f'[退出游戏] 异常: {e}')
 
