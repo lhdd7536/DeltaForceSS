@@ -817,6 +817,24 @@ class AccountPanel(ttk.Frame):
                 hint = f'{name}: 已完成' + (f'，预计 {est}' if est and est != '—' else '')
                 self.after(0, lambda h=hint: self.status_label.config(text=h, foreground='green'))
 
+            # 检查账号间完成时间差异：最早最晚相差超过 8h 说明部分账号制造失败
+            end_times = []
+            for acc in accounts:
+                est = acc.get('estimated_end', '') or ''
+                if est and est != '—':
+                    try:
+                        t = datetime.strptime(est, '%H:%M')
+                        end_times.append(t.hour * 60 + t.minute)
+                    except ValueError:
+                        pass
+            if len(end_times) >= 2:
+                diff = max(end_times) - min(end_times)
+                if diff > 720:  # 跨天修正（如 22:00~06:00）
+                    diff = 1440 - diff
+                if diff > 480:
+                    print(f'[多账号] 完成时间差 {diff//60}h{diff%60}m 超过 8h，判定有账号制造失败')
+                    self._cycle_has_failure = True
+
             # 所有账号处理完毕，退出 WeGame
             print('[多账号] 本轮制造完成，退出 WeGame')
             wegame_switcher.exit_wegame()
