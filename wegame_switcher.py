@@ -202,7 +202,7 @@ def activate_wegame(wegame_path=None):
 
     # 第二步：没找到窗口 → 先杀残留进程再启动（确保干净环境）
     exit_wegame()
-    _jitter_sleep(3)
+    _jitter_sleep(7)
 
     # 第三步：启动 WeGame
     if not wegame_path or not os.path.exists(wegame_path):
@@ -217,7 +217,7 @@ def activate_wegame(wegame_path=None):
                 title = win32gui.GetWindowText(wegame_hwnd)
                 print(f'[wegame] 启动成功: "{title}"')
                 restore_window(wegame_hwnd)
-                _jitter_sleep(2)  # 启动后多等一会儿让界面稳定
+                _jitter_sleep(2)  # 等待 WeGame 界面完全渲染稳定
                 return wegame_hwnd
         print(f'[wegame] 启动后未检测到窗口（等待超时）')
 

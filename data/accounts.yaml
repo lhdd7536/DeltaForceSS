@@ -4,21 +4,21 @@ accounts:
       - 1008
       - 624
     enabled: true
-    estimated_end: '01:29'
+    estimated_end: '10:09'
     scroll_before_click: 0
   - name: 小号
     click_pos:
       - 1005
       - 662
     enabled: true
-    estimated_end: '01:41'
+    estimated_end: '10:13'
     scroll_before_click: 0
   - name: qq2
     click_pos:
       - 1015
       - 691
     enabled: true
-    estimated_end: '01:34'
+    estimated_end: '10:06'
     scroll_before_click: 0
   # 第4个账号：先向下滚轮1次再点击（位置同第3个账号）
   - name: 账号4
@@ -26,7 +26,7 @@ accounts:
       - 1015
       - 691
     enabled: true
-    estimated_end: '01:58'
+    estimated_end: '10:02'
     scroll_before_click: 1
   # 第5个账号：先向下滚轮2次再点击（位置同第3个账号）
   - name: 账号5
@@ -55,7 +55,7 @@ wegame:
   dash_entry_pos:
     - 831
     - 58
-  wait_before_app: 6
+  wait_before_app: 10
   wait_game_launch: 52
   wait_before_space: 7
   craft_start_wait: 70
