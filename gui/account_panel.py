@@ -13,6 +13,9 @@ import traceback
 from datetime import datetime, timedelta
 import os
 import sys
+import win32gui
+import win32process
+import psutil
 
 from ruamel.yaml import YAML
 _yaml_dumper = YAML()
@@ -635,7 +638,7 @@ class AccountPanel(ttk.Frame):
             if self._wait_check(remaining):
                 return False
 
-        wegame_switcher.restore_window(hwnd)
+        wegame_switcher.bring_to_foreground(hwnd)
         jitter_sleep(1)
         mode_pos = wg_cfg.get('mode_btn_pos', [300, 500])
         wegame_switcher.click_game_mode(mode_pos)
@@ -733,6 +736,16 @@ class AccountPanel(ttk.Frame):
                 if self._wait_check(3):
                     print('[多账号] 用户已停止')
                     return
+
+                # 输出前台进程调试信息
+                try:
+                    fg_hwnd = win32gui.GetForegroundWindow()
+                    _, fg_pid = win32process.GetWindowThreadProcessId(fg_hwnd)
+                    fg_title = win32gui.GetWindowText(fg_hwnd)
+                    fg_proc = psutil.Process(fg_pid)
+                    print(f'{name}: 前台进程 [PID={fg_pid}] {fg_proc.name()} - "{fg_title}"')
+                except Exception as e:
+                    print(f'{name}: 获取前台进程信息失败: {e}')
 
                 # 步骤 1-9：登录 + 导航到特勤处
                 if not self._login_and_navigate(account, wg_cfg):

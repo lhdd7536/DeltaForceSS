@@ -103,6 +103,45 @@ def restore_window(hwnd):
     _SwitchToThisWindow(hwnd, True)
 
 
+def bring_to_foreground(hwnd, max_retries=4):
+    """
+    反复尝试将指定窗口置为前台，最多重试 max_retries 次。
+    如果全部失败，杀 GameInputSvc.exe（常见抢前台进程）后再试 1 次。
+    返回 True 表示成功，False 表示最终未能置前。
+    """
+    _, target_pid = win32process.GetWindowThreadProcessId(hwnd)
+    for i in range(max_retries):
+        restore_window(hwnd)
+        _jitter_sleep(1)
+        fg_hwnd = win32gui.GetForegroundWindow()
+        if fg_hwnd and fg_hwnd == hwnd:
+            return True
+        if fg_hwnd:
+            _, fg_pid = win32process.GetWindowThreadProcessId(fg_hwnd)
+            if fg_pid == target_pid:
+                return True
+            fg_title = win32gui.GetWindowText(fg_hwnd)
+        else:
+            fg_title = '<无前台窗口>'
+        print(f'[wegame] 置前尝试 {i+1}/{max_retries} 失败，当前前台: "{fg_title}"')
+        _jitter_sleep(1)
+
+    # 正常重试全失败 → 杀 GameInputSvc.exe 再试最后一轮
+    print(f'[wegame] 置前受阻，尝试杀 GameInputSvc.exe...')
+    os.system('taskkill /f /im GameInputSvc.exe >nul 2>&1')
+    _jitter_sleep(1)
+    restore_window(hwnd)
+    _jitter_sleep(1)
+    fg_hwnd = win32gui.GetForegroundWindow()
+    if fg_hwnd and fg_hwnd == hwnd:
+        return True
+    if fg_hwnd:
+        _, fg_pid = win32process.GetWindowThreadProcessId(fg_hwnd)
+        if fg_pid == target_pid:
+            return True
+    return False
+
+
 def is_window_exist(class_name, title):
     """检查窗口是否存在"""
     return win32gui.FindWindow(class_name, title) != 0
@@ -196,7 +235,10 @@ def activate_wegame(wegame_path=None):
         _jitter_sleep(1)
 
     if wegame_hwnd:
-        restore_window(wegame_hwnd)
+        if bring_to_foreground(wegame_hwnd):
+            print(f'[wegame] 成功置前')
+        else:
+            print(f'[wegame] 置前失败，继续执行')
         _jitter_sleep(0.5)
         return wegame_hwnd
 
@@ -215,8 +257,12 @@ def activate_wegame(wegame_path=None):
             wegame_hwnd = _find_wegame_hwnd()
             if wegame_hwnd:
                 title = win32gui.GetWindowText(wegame_hwnd)
-                print(f'[wegame] 启动成功: "{title}"')
-                restore_window(wegame_hwnd)
+                print(f'[wegame] 启动成功: "{title}"，等待 WeGame 初始化完成...')
+                _jitter_sleep(3)  # 等待 WeGame 完全初始化后再置前
+                if bring_to_foreground(wegame_hwnd):
+                    print(f'[wegame] 成功置前')
+                else:
+                    print(f'[wegame] 置前失败，继续执行')
                 _jitter_sleep(2)  # 等待 WeGame 界面完全渲染稳定
                 return wegame_hwnd
         print(f'[wegame] 启动后未检测到窗口（等待超时）')
