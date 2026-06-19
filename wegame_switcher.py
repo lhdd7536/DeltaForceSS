@@ -103,7 +103,7 @@ def restore_window(hwnd):
     _SwitchToThisWindow(hwnd, True)
 
 
-def bring_to_foreground(hwnd, max_retries=2):
+def bring_to_foreground(hwnd):
     """
     将指定窗口置为前台。
     - 第1次：直接尝试 SwitchToThisWindow
@@ -143,56 +143,6 @@ def bring_to_foreground(hwnd, max_retries=2):
 def is_window_exist(class_name, title):
     """检查窗口是否存在"""
     return win32gui.FindWindow(class_name, title) != 0
-
-
-def ensure_wegame_foreground():
-    """
-    检查 WeGame 是否在前台，若被 GameInputSvc 抢占则自动处理。
-    如果暂时找不到窗口（登录切换过渡期），轮询等待最多 3 秒。
-    返回 True 表示 WeGame 在前台或已处理，False 表示无法恢复。
-    """
-    # 轮询等待 WeGame 窗口出现（过渡期窗口可能正在重建）
-    wegame_hwnd = None
-    for _ in range(6):
-        wegame_hwnd = _find_wegame_hwnd()
-        if wegame_hwnd:
-            break
-        _jitter_sleep(0.5)
-
-    if not wegame_hwnd:
-        print('[wegame] 无法找到 WeGame 窗口')
-        return False
-
-    _, target_pid = win32process.GetWindowThreadProcessId(wegame_hwnd)
-
-    fg_hwnd = win32gui.GetForegroundWindow()
-    if fg_hwnd:
-        _, fg_pid = win32process.GetWindowThreadProcessId(fg_hwnd)
-        if fg_pid == target_pid:
-            return True  # WeGame 已在前台
-        try:
-            fg_proc = psutil.Process(fg_pid)
-            fg_name = fg_proc.name()
-        except Exception:
-            fg_name = '?'
-        fg_title = win32gui.GetWindowText(fg_hwnd)
-        print(f'[wegame] 前台不是 WeGame，当前: {fg_name} - "{fg_title}"')
-
-        # 如果是 GameInputSvc 抢前台 → 杀进程后重新置前
-        if fg_name and 'gameinput' in fg_name.lower():
-            print(f'[wegame] GameInputSvc 抢前台，自动杀进程...')
-            os.system('taskkill /f /im GameInputSvc.exe >nul 2>&1')
-            _jitter_sleep(1)
-    else:
-        print('[wegame] 无前台窗口')
-
-    # 尝试将 WeGame 置前
-    if bring_to_foreground(wegame_hwnd):
-        print(f'[wegame] 已恢复 WeGame 到前台')
-        return True
-    else:
-        print(f'[wegame] 无法恢复 WeGame 到前台')
-        return False
 
 
 # ── WeGame 管理 ──────────────────────────────────────
