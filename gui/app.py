@@ -17,6 +17,14 @@ from gui.main_window import MainWindow
 
 
 def main():
+    # 隐藏控制台时重定向 print 到日志文件
+    if not sys.stdout:
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'log')
+        log_dir = os.path.normpath(log_dir)
+        os.makedirs(log_dir, exist_ok=True)
+        sys.stdout = open(os.path.join(log_dir, 'app.log'), 'w', encoding='utf-8')
+        sys.stderr = sys.stdout
+
     import tkinter as tk
     root = MainWindow()
     root.mainloop()

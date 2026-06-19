@@ -60,6 +60,14 @@ with open('user_config.yaml', 'r', encoding='utf-8') as fin:
 
 OUTPUT_DIR = './log'
 TESSERACT_PATH = user_config['TESSERACT_PATH']
+# 如果配置路径不存在，尝试 dev 模式路径（相对于项目根目录的 dist/Tesseract-OCR）
+if not os.path.exists(TESSERACT_PATH):
+    dev_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'dist', 'Tesseract-OCR', 'tesseract.exe',
+    )
+    if os.path.exists(dev_path):
+        TESSERACT_PATH = dev_path
 
 pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
 scale_factor = 1

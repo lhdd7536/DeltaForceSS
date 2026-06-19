@@ -15,7 +15,7 @@ medical:
 armor:
 # 防具台
   - [重型突击背心, -1]
-TESSERACT_PATH: .\dist\Tesseract-OCR\tesseract.exe
+TESSERACT_PATH: Tesseract-OCR\tesseract.exe
 hotkey: f8
 background_mode: false
 debug_mode: false
