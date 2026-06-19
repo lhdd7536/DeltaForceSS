@@ -599,6 +599,21 @@ class AccountPanel(ttk.Frame):
         print(f'{name}: 步骤4 等待 {wait_before_app} 秒后点击三角洲应用...')
         if self._wait_check(wait_before_app):
             return False
+        # 以前台进程为依据：若 GameInputSvc 抢前台则杀进程
+        try:
+            fg_hwnd = win32gui.GetForegroundWindow()
+            _, fg_pid = win32process.GetWindowThreadProcessId(fg_hwnd)
+            fg_title = win32gui.GetWindowText(fg_hwnd)
+            fg_proc = psutil.Process(fg_pid)
+            fg_name = fg_proc.name()
+            print(f'{name}: 点击三角洲应用前前台进程 [PID={fg_pid}] {fg_name} - "{fg_title}"')
+            if 'gameinput' in fg_name.lower():
+                print(f'{name}: GameInputSvc 抢前台，自动杀进程...')
+                os.system('taskkill /f /im GameInputSvc.exe >nul 2>&1')
+                jitter_sleep(1)
+        except Exception as e:
+            print(f'{name}: 获取前台进程信息失败: {e}')
+        jitter_sleep(0.5)
         game_pos = wg_cfg.get('game_app_pos', [150, 400])
         wegame_switcher.click_game_app(game_pos)
 

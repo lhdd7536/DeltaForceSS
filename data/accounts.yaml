@@ -1,48 +1,48 @@
 accounts:
-  - name: 大号
+  - name: 账号1
     click_pos:
-      - 1008
-      - 624
+      - 953
+      - 619
     enabled: true
-    estimated_end: '10:09'
+    estimated_end: '14:10'
     scroll_before_click: 0
-  - name: 小号
+  - name: 账号2
     click_pos:
-      - 1005
-      - 662
+      - 946
+      - 660
     enabled: true
-    estimated_end: '10:13'
+    estimated_end: '14:06'
     scroll_before_click: 0
-  - name: qq2
+  - name: 账号3
     click_pos:
-      - 1015
-      - 691
+      - 951
+      - 684
     enabled: true
-    estimated_end: '10:06'
+    estimated_end: '14:02'
     scroll_before_click: 0
   # 第4个账号：先向下滚轮1次再点击（位置同第3个账号）
   - name: 账号4
     click_pos:
-      - 1015
-      - 691
+      - 951
+      - 684
     enabled: true
-    estimated_end: '10:02'
+    estimated_end: '13:58'
     scroll_before_click: 1
   # 第5个账号：先向下滚轮2次再点击（位置同第3个账号）
   - name: 账号5
     click_pos:
-      - 1015
-      - 691
-    enabled: false
-    estimated_end: ''
+      - 957
+      - 684
+    enabled: true
+    estimated_end: '14:11'
     scroll_before_click: 2
 wegame:
   switch_account_btn_pos:
     - 1043
     - 576
   login_btn_pos:
-    - 998
-    - 704
+    - 956
+    - 706
   game_app_pos:
     - 204
     - 374
