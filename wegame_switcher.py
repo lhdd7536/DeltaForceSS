@@ -5,6 +5,7 @@ WeGame 账号切换 + 游戏退出工具模块。
 坐标基于 1920×1080 基准，运行时自动缩放。
 """
 
+import subprocess
 import time
 import os
 import random
@@ -61,6 +62,15 @@ def click_position(position):
     y += random.randint(-3, 3)
     pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))
     pyautogui.click()
+
+
+def _hide_cmd(command):
+    """执行命令，不弹出命令行窗口"""
+    subprocess.Popen(
+        command, shell=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
 
 
 # ── 窗口操作 ──────────────────────────────────────────
@@ -133,7 +143,7 @@ def bring_to_foreground(hwnd):
     print(f'[wegame] 置前失败，当前前台: "{fg_title}"，杀 GameInputSvc.exe...')
 
     # 杀 GameInputSvc 后重试
-    os.system('taskkill /f /im GameInputSvc.exe >nul 2>&1')
+    _hide_cmd('taskkill /f /im GameInputSvc.exe >nul 2>&1')
     _jitter_sleep(1)
     restore_window(hwnd)
     _jitter_sleep(1)
@@ -383,9 +393,9 @@ def exit_game(method='alt_f4'):
         hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
         if hwnd:
             _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            os.system(f'taskkill /f /pid {pid}')
+            _hide_cmd(f'taskkill /f /pid {pid}')
         else:
-            os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
+            _hide_cmd(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
         _jitter_sleep(2)
 
 
@@ -407,14 +417,14 @@ def wait_game_exit(timeout=30):
     hwnd = win32gui.FindWindow(GAME_CLASS, GAME_TITLE)
     if hwnd:
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        os.system(f'taskkill /f /pid {pid}')
+        _hide_cmd(f'taskkill /f /pid {pid}')
     else:
-        os.system(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
+        _hide_cmd(f'taskkill /f /fi "WINDOWTITLE eq {GAME_TITLE}"')
     _jitter_sleep(2)
     return False
 
 
 def exit_wegame():
     """退出 WeGame 进程（进程不存在时静默）"""
-    os.system('taskkill /f /im wegame.exe >nul 2>&1')
+    _hide_cmd('taskkill /f /im wegame.exe >nul 2>&1')
     _jitter_sleep(1)

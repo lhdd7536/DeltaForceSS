@@ -4,6 +4,7 @@
 管理账号列表、WeGame 配置，按顺序调度多账号自动制造。
 """
 
+import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import threading
@@ -609,7 +610,7 @@ class AccountPanel(ttk.Frame):
             print(f'{name}: 点击三角洲应用前前台进程 [PID={fg_pid}] {fg_name} - "{fg_title}"')
             if 'gameinput' in fg_name.lower():
                 print(f'{name}: GameInputSvc 抢前台，自动杀进程...')
-                os.system('taskkill /f /im GameInputSvc.exe >nul 2>&1')
+                wegame_switcher._hide_cmd('taskkill /f /im GameInputSvc.exe >nul 2>&1')
                 jitter_sleep(1)
         except Exception as e:
             print(f'{name}: 获取前台进程信息失败: {e}')
