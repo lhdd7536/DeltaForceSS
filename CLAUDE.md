@@ -34,6 +34,17 @@ set PYTHONIOENCODING=utf-8
 D:/Anaconda3/envs/deltaforce/python.exe main.py
 ```
 
+### 打包为 EXE
+
+```bash
+cd H:\GithubProjects\DeltaForceSS
+conda run -n deltaforce pyinstaller build.spec
+```
+
+构建完成后执行 `build.bat`（或将 `dist\DeltaForceSS\_internal\` 中的 `config.yaml`、`user_config.yaml`、`data\`、`Tesseract-OCR\` 移动到 EXE 同级目录）。
+
+> **注意**：EXE 模式下使用 `sys.executable` 定位资源文件（`config.yaml`、`user_config.yaml`、`data/accounts.yaml` 等），因此启动时 CWD 无关紧要。打包前修改了源码后必须重新打包才会生效。
+
 ### 关闭程序
 
 ```bash

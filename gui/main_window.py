@@ -19,7 +19,12 @@ import win32gui
 import win32con
 
 # 项目根目录
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    # PyInstaller EXE 模式：使用 EXE 所在目录
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+else:
+    # 源码模式：使用项目根目录
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 import yaml

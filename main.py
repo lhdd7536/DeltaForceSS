@@ -19,6 +19,7 @@ from datetime import datetime
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 import ctypes
+import sys
 from utils import calc_jitter
 
 try:
@@ -26,6 +27,12 @@ try:
     _HAS_FETCHER = True
 except ImportError:
     _HAS_FETCHER = False
+
+# ── 项目根目录（兼容 PyInstaller EXE 模式） ──────────────
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+else:
+    PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 class IncorrectPageError(Exception):
     def __init__(self, message="未检测到特勤处建造界面"):
@@ -52,19 +59,18 @@ class IncorrectResolution(Exception):
         self.message = message
         super().__init__(self.message)
 
-with open('config.yaml', 'r', encoding='utf-8') as fin:
+with open(os.path.join(PROJECT_ROOT, 'config.yaml'), 'r', encoding='utf-8') as fin:
     config = yaml.load(fin, Loader=yaml.FullLoader)
 
-with open('user_config.yaml', 'r', encoding='utf-8') as fin:
+with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'r', encoding='utf-8') as fin:
     user_config = yaml.load(fin, Loader=yaml.FullLoader)
 
-OUTPUT_DIR = './log'
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'log')
 TESSERACT_PATH = user_config['TESSERACT_PATH']
-# 如果配置路径不存在，尝试 dev 模式路径（相对于项目根目录的 dist/Tesseract-OCR）
+# 如果配置路径不存在，尝试相对于项目根目录的 dist/Tesseract-OCR
 if not os.path.exists(TESSERACT_PATH):
     dev_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'dist', 'Tesseract-OCR', 'tesseract.exe',
+        PROJECT_ROOT, 'dist', 'Tesseract-OCR', 'tesseract.exe',
     )
     if os.path.exists(dev_path):
         TESSERACT_PATH = dev_path

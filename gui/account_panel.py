@@ -23,7 +23,12 @@ _yaml_dumper = YAML()
 _yaml_dumper.indent(mapping=2, sequence=4, offset=2)
 _yaml_dumper.preserve_quotes = True
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    # PyInstaller EXE 模式：使用 EXE 所在目录
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+else:
+    # 源码模式：使用项目根目录
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 import pyautogui
