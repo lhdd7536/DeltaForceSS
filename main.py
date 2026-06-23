@@ -8,7 +8,10 @@ import yaml
 import re
 import time
 import keyboard
-import winsound
+try:
+    import winsound
+except ImportError:
+    winsound = None
 import hashlib
 import random
 import win32gui, win32con
@@ -380,10 +383,12 @@ def best_match_item(str1, reference):
 
 # Other function
 def high_beep():
-    winsound.Beep(2000, 500)
+    if winsound:
+        winsound.Beep(2000, 500)
 
 def low_beep():
-    winsound.Beep(500, 500)
+    if winsound:
+        winsound.Beep(500, 500)
     
 def alt_tab():
     keyboard.press('alt')

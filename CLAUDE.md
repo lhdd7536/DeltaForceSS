@@ -38,10 +38,17 @@ D:/Anaconda3/envs/deltaforce/python.exe main.py
 
 ```bash
 cd H:\GithubProjects\DeltaForceSS
+# 清理旧输出
+rm -rf dist/DeltaForceSS build
+# 打包
 conda run -n deltaforce pyinstaller build.spec
+# 将配置和资源文件移出 _internal/ 到 EXE 同级
+cd dist/DeltaForceSS
+mv _internal/config.yaml .
+mv _internal/user_config.yaml .
+mv _internal/data .
+mv _internal/Tesseract-OCR .
 ```
-
-构建完成后执行 `build.bat`（或将 `dist\DeltaForceSS\_internal\` 中的 `config.yaml`、`user_config.yaml`、`data\`、`Tesseract-OCR\` 移动到 EXE 同级目录）。
 
 > **注意**：EXE 模式下使用 `sys.executable` 定位资源文件（`config.yaml`、`user_config.yaml`、`data/accounts.yaml` 等），因此启动时 CWD 无关紧要。打包前修改了源码后必须重新打包才会生效。
 
