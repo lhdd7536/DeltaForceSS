@@ -361,12 +361,28 @@ def OCR_price(image):
     return int(price)
 
 def is_main_page():
+    region = departments_coords['tech_dep_region']
+    # 确保日志目录存在（debug_mode 关闭时也需要保存调试截图）
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     for i in range(2):
-        image = screenshot('binary', 'main_page', departments_coords['tech_dep_region'])
+        image = screenshot('binary', 'main_page', region)
         t_config = r'-l chi_sim --psm 7'
         text = pytesseract.image_to_string(image, config=t_config)
+        print(f'[DEBUG is_main_page] 尝试 {i+1}/2 — 区域: {region} — OCR 原始文本: "{text.strip()}"')
         if '技术中心' in text:
             return True
+    # 两次都失败：保存截图到 log 目录方便肉眼确认
+    print(f'[DEBUG is_main_page] 检测失败！坐标区域 {region} 中未识别到"技术中心"')
+    print(f'[DEBUG is_main_page] 两次 OCR 结果均不含目标文字，请检查截图确认 UI 布局是否变化')
+    # 保存全屏截图
+    full = screenshot('original', 'main_page_fail_full')
+    save_image([(full, 'main_page_fail_full', None)])
+    # 保存区域彩色截图（更易肉眼辨认）
+    pil_img = ImageGrab.grab(bbox=(region[0], region[1], region[0]+region[2], region[1]+region[3]))
+    frame = np.array(pil_img)
+    region_color = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    save_image([(region_color, 'main_page_fail_region', region)])
+    print(f'[DEBUG is_main_page] 已保存截图到 {OUTPUT_DIR}/，请查看 main_page_fail_full 和 main_page_fail_region')
     return False
 
 def best_match_item(str1, reference):
@@ -457,7 +473,7 @@ def initalize_preparation():
     buy_state = find_buy_state()
     return buy_state == -1
 
-def department_status(dash_img, dep_coords):
+def department_status(dash_img, dep_coords, dep_name=''):
     '''
     return remain time in sec
     -1: done
@@ -471,12 +487,18 @@ def department_status(dash_img, dep_coords):
             return hh * 3600 + mm * 60 + ss
         except:
             return None  # 解析失败返回 None 而非固定 1800，避免"完成"状态被误判为"占用中"
-    
+
+    prefix = f'[{dep_name}]' if dep_name else ''
+
     # check 设备处于空闲状态
     x, y = dep_coords['free']
     w, h = dep_coords['free_size']
     center_img = cropImage(dash_img, (x, y, w, h))
-    if OCR_is_free(center_img):
+    is_free = OCR_is_free(center_img)
+    t_config = r'-l chi_sim'
+    free_text = pytesseract.image_to_string(center_img, config=t_config)
+    print(f'{prefix} [DEBUG department_status] 空闲检测区域 ({x},{y},{w},{h}) OCR: "{free_text.strip()}" → 匹配空闲中: {is_free}')
+    if is_free:
         return -2
 
     # read remain time: success -> in progress, fail -> done
@@ -484,8 +506,9 @@ def department_status(dash_img, dep_coords):
     w, h = dep_coords['timmer_size']
     timmer_img = cropImage(dash_img, (x, y, w, h))
     remain_time = OCR_remain_time(timmer_img)
+    print(f'{prefix} [DEBUG department_status] 计时器区域 ({x},{y},{w},{h}) OCR: "{remain_time}"')
     remain_time = time_to_seconds(remain_time)
-    
+
     if remain_time is None:
         return -1
     return remain_time
@@ -531,13 +554,17 @@ def dash_page():
     def get_remain_times(dash_img):
         status = []
         for dep, coords in departments_coords['dash_page'].items():
-            status.append((dep, department_status(dash_img, coords)))
+            status.append((dep, department_status(dash_img, coords, dep)))
         return status
 
     if debug_mode:
         setup_output_directory(OUTPUT_DIR)
 
     if not is_main_page():
+        print(f'[DEBUG dash_page] is_main_page() 返回 False，将抛出 IncorrectPageError')
+        print(f'[DEBUG dash_page] departments_coords[\'tech_dep_region\'] = {departments_coords["tech_dep_region"]}')
+        print(f'[DEBUG dash_page] 缩放因子 scale_factor = {scale_factor}')
+        print(f'[DEBUG dash_page] 请检查 log/ 目录下的 main_page_fail_*.png 截图确认当前画面')
         raise IncorrectPageError()
 
     dash_img = screenshot('gray', 'department_status')

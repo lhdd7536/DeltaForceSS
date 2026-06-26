@@ -5,16 +5,16 @@
 
 tech:
 # 技术中心
-  - [SR-3M紧凑突击步枪, -1]
+  - [AKM突击步枪, -1]
 work:
 # 工作台
-  - [5.45x39mm BS, -1]
+  - [45-70 Govt FTX, -1]
 medical:
 # 制药台
-  - [精密头盔维修包, -1]
+  - [OE2战斗兴奋剂, -1]
 armor:
 # 防具台
-  - [重型突击背心, -1]
+  - [精英防弹背心, -1]
 TESSERACT_PATH: Tesseract-OCR\tesseract.exe
 hotkey: f8
 background_mode: false
