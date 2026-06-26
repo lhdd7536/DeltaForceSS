@@ -192,7 +192,7 @@ def scroll_down_x4(position):
         pyautogui.sleep(0.1)
     _interruptible_sleep(1)
 
-def craft(coordination):
+def craft(coordination, department=None):
     build_position = departments_coords['build_position']
     click_position(coordination)
     _interruptible_sleep(1)
@@ -200,8 +200,15 @@ def craft(coordination):
     if has_all_materials:
         click_position(build_position)
         _interruptible_sleep(3)
+        # 点击建造成功后才消耗队列（避免制造失败时丢失配置项）
+        if department:
+            write_user_config(department)
+        keyboard.send('esc')
+        _interruptible_sleep(1)
+        return True
     keyboard.send('esc')
     _interruptible_sleep(1)
+    return False
 
 
 # Image
@@ -476,8 +483,8 @@ def initalize_preparation():
 def department_status(dash_img, dep_coords, dep_name=''):
     '''
     return remain time in sec
-    -1: done
-    -2: not started
+    -1: done (completed & ready to collect)
+    -2: not started (idle)
     '''
     def time_to_seconds(time_str):
         if time_str is None:
@@ -501,7 +508,7 @@ def department_status(dash_img, dep_coords, dep_name=''):
     if is_free:
         return -2
 
-    # read remain time: success -> in progress, fail -> done
+    # read remain time: success -> in progress, fail -> unknown
     x, y = dep_coords['timmer']
     w, h = dep_coords['timmer_size']
     timmer_img = cropImage(dash_img, (x, y, w, h))
@@ -582,14 +589,14 @@ def dash_page():
                 return []
             state = -2
         if state == -2 and wait_list[dep]:
-            processing_department.add(dep)
-            write_user_config(dep)
+            # 队列消耗在 craft() 中点击建造后执行，此处仅打开制造列表
             click_position(departments_coords['dash_page'][dep]['free'])
             if _interruptible_sleep(3):
                 return []
-            list_page(dep)
-            if _interruptible_sleep(0.5):
-                return []
+            if list_page(dep):  # craft() 返回 True = 建造按钮已点击
+                processing_department.add(dep)
+            # 若返回 False（物品未找到/材料不足），不在 processing_department 中
+            # 重试轮次会再次尝试
 
     # 重试轮次：某些部门可能在其他部门处理期间变为完成/空闲，或 OCR 误判导致第一轮漏处理
     for retry in range(3):
@@ -597,6 +604,11 @@ def dash_page():
             return []
         retry_img = screenshot('gray', 'department_status_retry')
         retry_status = get_remain_times(retry_img)
+        # 截屏有效性检查：如果没有任一个部门显示有效计时器（>0），说明截屏时机不对
+        # 此时所有部门的 -1 可能只是"OCR 读不到数字"而非真正完成，跳过本轮重试
+        valid_timer_count = sum(1 for _, s in retry_status if s > 0)
+        if valid_timer_count == 0:
+            continue
         has_new_work = False
         for dep, state in retry_status:
             if dep in processing_department:
@@ -619,15 +631,13 @@ def dash_page():
                 has_new_work = True
             elif state == -2 and wait_list[dep]:
                 # 刚空闲的部门：启动制造
-                write_user_config(dep)
                 click_position(departments_coords['dash_page'][dep]['free'])
                 if _interruptible_sleep(3):
                     return []
-                list_page(dep)
-                if _interruptible_sleep(0.5):
-                    return []
-                processing_department.add(dep)
-                has_new_work = True
+                if list_page(dep):  # craft() 返回 True = 制造成功启动
+                    processing_department.add(dep)
+                    has_new_work = True
+                # 返回 False 则仍空闲，等待下一次 main() 循环重试
         if not has_new_work:
             break
 
@@ -651,7 +661,7 @@ def dash_page():
 
 def list_page(department):
     category, target = wait_list[department]
-    list_page_operation(department, category, target)
+    return list_page_operation(department, category, target)
 
 def list_page_operation(department, category, target):
     reference = config['departments'][department][category]
@@ -666,7 +676,7 @@ def list_page_operation(department, category, target):
     for k in range(100):
         if _interruptible_sleep(0.05):
             keyboard.send('esc')
-            return
+            return False
         y1 = 2
         cells = match_list_items()
         # (image, y position)
@@ -678,15 +688,14 @@ def list_page_operation(department, category, target):
         score = 0
         if last_top_item:
             score = fuzz.ratio(last_top_item, current_top_item)
-            
+
         specialcase = '侧置' in last_top_item
 
         if score >= factor and not specialcase:
             print(f'! {department}.{category}.{target} 未找到')
             print(f'具体信息: last: {last_top_item}, OCR 结果: {current_top_item}, 相似度: {score}')
             keyboard.send('esc')
-            # time.sleep(1)
-            return
+            return False
 
         last_top_item = current_top_item
 
@@ -700,10 +709,13 @@ def list_page_operation(department, category, target):
             if match is None:
                 continue
             if match == target and score >= factor :
-                craft((x, y_offset + y))
-                return
+                return craft((x, y_offset + y), department)
         scroll_down_x4(black_spot)
-        
+    # 兜底：如果 for 循环跑满 100 次仍未找到也未触发"已到末尾"，确保返回仪表盘
+    keyboard.send('esc')
+    _interruptible_sleep(0.3)
+    return False
+
 def print_restart_info(remain_time):
     restart_time = datetime.now() + timedelta(seconds=remain_time)
     
