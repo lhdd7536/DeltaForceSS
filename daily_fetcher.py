@@ -245,6 +245,9 @@ def update_user_config(recipes: dict[str, str | None]):
     for dep, item_name in recipes.items():
         if item_name is None:
             continue
+        if dep == "tech":
+            print(f"[daily_fetcher] tech: 跳过网站推荐，使用配置中的默认制造")
+            continue
         current = user_cfg.get(dep)
         if current and len(current) > 0 and current[0][0] == item_name:
             print(f"[daily_fetcher] {dep}: 已经是 \"{item_name}\"，无需更新")
