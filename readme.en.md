@@ -82,6 +82,11 @@ Advanced settings (keep defaults recommended):
 
 ### 4. Notes
 - Pin target items in-game for better recognition
+- Only supports 16:9 resolution (1080p / 1440p / 4K)
+- Program auto-stops if not on the manufacturing screen
+- `.300 BLK` must be pinned manually (three ammo types share the same name)
+- Auto-restarts after 1 minute on OCR failure
+- **Auto-crafting period: 0:00 ~ 10:00** — outside this window, a popup will appear requiring manual confirmation
 - 16:9 resolution only (1080p / 1440p / 4K)
 - Program auto-stops if not on the manufacturing screen
 - `.300 BLK` must be pinned manually (three ammo types share the same name)
