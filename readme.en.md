@@ -43,7 +43,7 @@ Go to [Releases](https://github.com/lhdd7536/DeltaForceSS/releases) and download
 **Extract to a path with ONLY English characters (Tesseract OCR only supports ASCII paths).**
 
 Contents after extraction:
-- **`特勤处脚本.exe`** — Main program, run as Administrator
+- **`DeltaForceSS.exe`** — Main program, run as Administrator
 - **`config.yaml`** — Item database
 - **`user_config.yaml`** — User configuration (manufacturing queue)
 - **`data/`** — Multi-account configuration
@@ -71,7 +71,7 @@ Advanced settings (keep defaults recommended):
 **Single-account mode:**
 1. Open the game and navigate to the manufacturing screen
 2. Prepare non-purchasable items in advance (e.g., titanium alloy)
-3. **Run `特勤处脚本.exe` as Administrator**
+3. **Run `DeltaForceSS.exe` as Administrator**
 4. The program will auto-switch to the game and start the cycle
 
 **Multi-account mode (requires `data/accounts.yaml`):**
