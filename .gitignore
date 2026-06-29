@@ -10,3 +10,19 @@ user_config copy.yaml
 .vscode
 /Tesseract-OCR
 /dist
+
+# Python
+__pycache__/
+*.pyc
+
+# 运行时生成
+data/last_update_date.txt
+*.log
+
+# 空文件
+nul
+
+# IDE / 编辑器
+.claude/
+.idea/
+*.swp

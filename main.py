@@ -119,7 +119,7 @@ def update_wait_list():
                     return
         raise ValueError(f'Incorrect name: {target_name}')
     
-    with open('user_config.yaml', 'r', encoding='utf-8') as fin:
+    with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'r', encoding='utf-8') as fin:
         user_config = yaml.load(fin, Loader=yaml.FullLoader)
     
     for dep in ['tech', 'work', 'medical', 'armor']:
@@ -137,7 +137,7 @@ def write_user_config(department):
     yaml.width = 120
     
     # Load the existing config with comments
-    with open('user_config.yaml', 'r', encoding='utf-8') as file:
+    with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'r', encoding='utf-8') as file:
         user_config = yaml.load(file)
 
     if not user_config.get(department):
@@ -166,7 +166,7 @@ def write_user_config(department):
                     item.fa.set_flow_style()
     
     # Write back to file
-    with open('user_config.yaml', 'w', encoding='utf-8') as file:
+    with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'w', encoding='utf-8') as file:
         yaml.dump(user_config, file)
 
 valid_resolution = {(1920, 1080), (2560, 1440), (3840, 2160)}

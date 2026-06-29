@@ -208,7 +208,7 @@ def _find_wegame_path():
     candidates = [
         os.path.join(os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)'), 'Tencent', 'wegame', 'wegame.exe'),
         os.path.join(os.environ.get('ProgramFiles', 'C:\\Program Files'), 'Tencent', 'wegame', 'wegame.exe'),
-        'H:\\wegame\\wegame.exe',
+        os.path.join('C:\\', 'wegame', 'wegame.exe'),
     ]
     for p in candidates:
         if os.path.isfile(p):
