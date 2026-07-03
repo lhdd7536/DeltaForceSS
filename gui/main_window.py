@@ -226,8 +226,13 @@ class MainWindow(tk.Tk):
         recipe = ttk.LabelFrame(top, text='今日推荐配方', padding=self.PADDING)
         recipe.grid(row=0, column=1, sticky='nsew')
 
-        self.update_time_label = ttk.Label(recipe, text='更新于: --')
-        self.update_time_label.pack(anchor=tk.E)
+        # 头部：更新时间 + 手动更新按钮
+        recipe_header = ttk.Frame(recipe)
+        recipe_header.pack(fill=tk.X)
+        self.update_time_label = ttk.Label(recipe_header, text='更新于: --')
+        self.update_time_label.pack(side=tk.LEFT)
+        self.update_btn = ttk.Button(recipe_header, text='手动更新', command=self._manual_update_recipes)
+        self.update_btn.pack(side=tk.RIGHT)
 
         recipe_grid = ttk.Frame(recipe)
         recipe_grid.pack(fill=tk.BOTH, expand=True)
@@ -350,6 +355,33 @@ class MainWindow(tk.Tk):
                 self.update_time_label.config(text='今天尚未更新')
         except Exception as e:
             print(f'[GUI] 加载推荐配方失败: {e}')
+
+    # ── 手动更新配方 ────────────────────────────────────
+
+    def _manual_update_recipes(self):
+        """手动更新配方按钮回调"""
+        if hasattr(self, '_update_thread') and self._update_thread and self._update_thread.is_alive():
+            print('[GUI] 配方更新正在进行中...')
+            return
+
+        self.update_btn.config(state=tk.DISABLED, text='更新中...')
+        self._update_thread = threading.Thread(target=self._run_manual_update, daemon=True)
+        self._update_thread.start()
+
+    def _run_manual_update(self):
+        """后台线程：执行配方拉取"""
+        try:
+            from daily_fetcher import force_update_recipes
+            force_update_recipes()
+        except Exception as e:
+            print(f'[GUI] 手动更新配方失败: {e}')
+        finally:
+            self.after(0, self._on_update_complete)
+
+    def _on_update_complete(self):
+        """更新完成后刷新 UI"""
+        self.update_btn.config(state=tk.NORMAL, text='手动更新')
+        self._refresh_recipe_display()
 
     # ── 线程控制 ────────────────────────────────────────
 

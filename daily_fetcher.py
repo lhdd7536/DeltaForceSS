@@ -271,27 +271,22 @@ def update_user_config(recipes: dict[str, str | None]):
 # 对外入口
 # ============================================================
 
-def maybe_update_recipes():
+def _do_fetch_and_update() -> bool:
     """
-    供 main.py 调用的唯一入口。
-    检查今天是否已更新 → Playwright 加载页面 → 解析 → 匹配 → 写入。
-    任何步骤失败都不影响后续主循环。
+    执行抓取、解析、匹配、写入的完整流程（不检查日期）。
+    成功返回 True，失败返回 False。
     """
-    if not should_update_today():
-        print("[daily_fetcher] 今天已更新，跳过")
-        return
-
     print("[daily_fetcher] 正在获取今日特勤处制造推荐...")
     html = fetch_page_html()
     if html is None:
         print("[daily_fetcher] 跳过本次更新")
-        return
+        return False
 
     site_recipes = parse_recipes(html)
     total = sum(len(v) for v in site_recipes.values())
     if total == 0:
         print("[daily_fetcher] 未解析到任何推荐物品，跳过更新")
-        return
+        return False
 
     for dep, items in site_recipes.items():
         print(f"[daily_fetcher] {dep}: {items}")
@@ -301,11 +296,32 @@ def maybe_update_recipes():
 
     if not any(matched.values()):
         print("[daily_fetcher] 没有任何部门匹配到可制造的物品，跳过更新")
-        return
+        return False
 
     update_user_config(matched)
     mark_updated_today()
     print("[daily_fetcher] 今日配方更新完成")
+    return True
+
+
+def maybe_update_recipes():
+    """
+    供 main.py 调用的入口（自动模式）。
+    检查今天是否已更新，如未更新则执行抓取。
+    """
+    if not should_update_today():
+        print("[daily_fetcher] 今天已更新，跳过")
+        return
+    _do_fetch_and_update()
+
+
+def force_update_recipes():
+    """
+    供 GUI 手动更新调用。
+    忽略日期检查，强制拉取最新推荐并更新配方（技术中心除外）。
+    """
+    print("[daily_fetcher] 手动强制更新...")
+    _do_fetch_and_update()
 
 
 # ============================================================
