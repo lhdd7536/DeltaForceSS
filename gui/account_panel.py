@@ -68,6 +68,7 @@ class AccountPanel(ttk.Frame):
 
         self.accounts = []
         self._load_accounts()
+        self._auto_run_hour = self._load_auto_hour()
         self._build_ui()
 
     # ── 数据加载/保存 ──────────────────────────────────
@@ -90,6 +91,23 @@ class AccountPanel(ttk.Frame):
         }
         os.makedirs(os.path.dirname(ACCOUNTS_FILE), exist_ok=True)
         _dump_yaml(ACCOUNTS_FILE, data)
+
+    def _load_auto_hour(self):
+        """从 user_config.yaml 加载自动执行截止小时"""
+        try:
+            cfg = _load_yaml(USER_CONFIG_FILE)
+            return int(cfg.get('auto_run_until_hour', 10))
+        except Exception:
+            return 10
+
+    def _save_user_config(self):
+        """保存 auto_run_until_hour 到 user_config.yaml"""
+        try:
+            cfg = _load_yaml(USER_CONFIG_FILE)
+            cfg['auto_run_until_hour'] = self._auto_run_hour
+            _dump_yaml(USER_CONFIG_FILE, cfg)
+        except Exception as e:
+            print(f'[多账号] 保存 auto_run_until_hour 失败: {e}')
 
     def _refresh_list(self):
         """刷新 Treeview 显示"""
@@ -163,6 +181,14 @@ class AccountPanel(ttk.Frame):
         ttk.Label(ctrl_row, text='循环间隔(秒):').pack(side=tk.LEFT, padx=(10, 2))
         self.loop_interval_var = tk.StringVar(value=str(self.wegame_cfg.get('loop_interval', 28800)))
         ttk.Entry(ctrl_row, width=7, textvariable=self.loop_interval_var).pack(side=tk.LEFT)
+
+        ttk.Label(ctrl_row, text='自动执行至时:').pack(side=tk.LEFT, padx=(10, 2))
+        self.auto_hour_var = tk.StringVar(value=str(self._auto_run_hour))
+        auto_spin = ttk.Spinbox(ctrl_row, from_=0, to=23, width=3,
+                                textvariable=self.auto_hour_var, command=self._on_auto_hour_changed)
+        auto_spin.pack(side=tk.LEFT)
+        auto_spin.bind('<FocusOut>', lambda e: self._on_auto_hour_changed())
+        auto_spin.bind('<Return>', lambda e: self._on_auto_hour_changed())
 
         self.next_cycle_label = ttk.Label(ctrl_row, text='', foreground='gray')
         self.next_cycle_label.pack(side=tk.LEFT, padx=(10, 0))
@@ -362,6 +388,19 @@ class AccountPanel(ttk.Frame):
         self._save_accounts()
         self._refresh_list()
 
+    # ── 自动执行时段 ────────────────────────────────────
+
+    def _on_auto_hour_changed(self):
+        """保存 auto_run_until_hour 到 user_config.yaml"""
+        try:
+            val = int(self.auto_hour_var.get())
+            self._auto_run_hour = max(0, min(23, val))
+            self.auto_hour_var.set(str(self._auto_run_hour))
+            self._save_user_config()
+            print(f'[多账号] 自动执行截止时已设为 {self._auto_run_hour} 时')
+        except ValueError:
+            pass
+
     # ── WeGame 配置 ────────────────────────────────────
 
     def _save_wg_config(self):
@@ -462,11 +501,9 @@ class AccountPanel(ttk.Frame):
                     return
 
                 # 弹窗确认（auto_run_until_hour 之前自动执行，不弹窗）
-                cfg = _load_yaml(USER_CONFIG_FILE)
-                auto_hour = cfg.get('auto_run_until_hour', 10)
                 now_hour = datetime.now().hour
-                if now_hour <= auto_hour:
-                    print(f'[多账号] {auto_hour} 时前自动执行，跳过弹窗')
+                if now_hour <= self._auto_run_hour:
+                    print(f'[多账号] {self._auto_run_hour} 时前自动执行，跳过弹窗')
                 elif not self._confirm_next_cycle():
                     break
 
