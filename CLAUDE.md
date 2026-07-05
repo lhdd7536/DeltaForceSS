@@ -123,7 +123,7 @@ taskkill //f //pid <进程ID>
 ## 配置文件
 
 - `config.yaml` — 物品数据库 (`departments`)、屏幕坐标 (`departments_coords`)、各部门 OCR 配置、匹配阈值 (`OCR_factors`)
-- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`)、Tesseract 路径、调试/后台模式开关
+- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径、调试/后台模式开关
 - `data/accounts.yaml` — 多账号配置：
   - `accounts` — 账号列表（名称、点击坐标、是否启用、预计完成时间、滚动次数）
   - `wegame` — WeGame 操作坐标（账号管理按钮、登录按钮、游戏应用等）和各步骤等待时长
@@ -149,6 +149,9 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 使用 PIL `ImageGrab.grab()` 截取屏幕，经 OpenCV 处理（灰度化、Otsu 二值化），Tesseract OCR 识别文字，`rapidfuzz` 进行字符串匹配。
 
+- **空闲检测** (`OCR_is_free`) 使用 `fuzz.ratio`（完整匹配），阈值 > 60，避免单字子串误匹配为"空闲中"
+- **物品名称匹配** (`best_match_item`) 使用 `fuzz.ratio`，配合各部门独立的 `OCR_factors` 阈值
+
 ## 测试
 
 - `list_OCR_test(department, categories)` — 验证指定部门物品类别的 OCR 识别效果
@@ -162,3 +165,4 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 |------|------|------|
 | v3.2 | `890c7cd` | 原仓库最新版本 (S9 赛季) |
 | v3.3 | `f6e1b03` | 多账号制造流程重构：启动即走、阶段分组GUI、F8快捷键、可配置等待时长 |
+| v3.4 | `ee842b4` | 修复空闲检测误判：partial_ratio → ratio；auto_run_until_hour 可配置 |

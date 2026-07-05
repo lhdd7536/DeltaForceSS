@@ -37,6 +37,7 @@ from utils import jitter_sleep
 
 
 ACCOUNTS_FILE = os.path.join(PROJECT_ROOT, 'data', 'accounts.yaml')
+USER_CONFIG_FILE = os.path.join(PROJECT_ROOT, 'user_config.yaml')
 
 
 def _load_yaml(path):
@@ -460,10 +461,12 @@ class AccountPanel(ttk.Frame):
                 if self._user_stop or not self.loop_var.get():
                     return
 
-                # 弹窗确认（睡眠时间段 0:00-10:00 跳过，自动执行）
+                # 弹窗确认（auto_run_until_hour 之前自动执行，不弹窗）
+                cfg = _load_yaml(USER_CONFIG_FILE)
+                auto_hour = cfg.get('auto_run_until_hour', 10)
                 now_hour = datetime.now().hour
-                if now_hour <= 10:
-                    print('[多账号] 睡眠时间段，自动执行')
+                if now_hour <= auto_hour:
+                    print(f'[多账号] {auto_hour} 时前自动执行，跳过弹窗')
                 elif not self._confirm_next_cycle():
                     break
 

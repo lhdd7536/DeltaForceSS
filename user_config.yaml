@@ -5,16 +5,17 @@
 
 tech:
 # 技术中心
-  - [灵眼3/7弹道计算狙击镜, -1]
+  - [AUG突击步枪, -1]
 work:
 # 工作台
-  - [6.8x51mm PLY-II, -1]
+  - [5.45x39mm BS, -1]
 medical:
 # 制药台
-  - [感知强化剂, -1]
+  - [精密护甲维修包, -1]
 armor:
 # 防具台
   - [精英防弹背心, -1]
+auto_run_until_hour: 10
 TESSERACT_PATH: Tesseract-OCR\tesseract.exe
 hotkey: f8
 background_mode: false
