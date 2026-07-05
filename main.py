@@ -340,12 +340,9 @@ def OCR_remain_time(image):
     return None
 
 def OCR_is_free(image):
-    '''
-    return match score > 50
-    '''
     t_config = r'-l chi_sim'
     text = pytesseract.image_to_string(image, config=t_config)
-    match_score = fuzz.partial_ratio(text, '空闲中')
+    match_score = fuzz.ratio(text, '空闲中')
     return match_score > 60
 
 def OCR_item_name(image, dep):
