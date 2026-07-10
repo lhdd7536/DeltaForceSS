@@ -9,6 +9,7 @@ import re
 from datetime import date
 from rapidfuzz import fuzz
 import os
+from utils import read_with_encoding_fallback
 
 # ============================================================
 # Playwright 按需导入
@@ -48,8 +49,7 @@ def should_update_today() -> bool:
     cache_file = os.path.join(_get_cache_dir(), "last_update_date.txt")
     if not os.path.exists(cache_file):
         return True
-    with open(cache_file, "r", encoding="utf-8") as f:
-        saved = f.read().strip()
+    saved = read_with_encoding_fallback(cache_file).strip()
     return saved != str(date.today())
 
 
@@ -169,8 +169,7 @@ def parse_recipes(html: str) -> dict[str, list[str]]:
 
 def load_config_departments(config_path: str = "config.yaml") -> dict[str, set[str]]:
     import yaml
-    with open(config_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    cfg = yaml.safe_load(read_with_encoding_fallback(config_path))
 
     result: dict[str, set[str]] = {}
     for dep, categories in cfg.get("departments", {}).items():
@@ -238,8 +237,7 @@ def update_user_config(recipes: dict[str, str | None]):
     yaml_loader.preserve_quotes = True
     yaml_loader.width = 120
 
-    with open(user_config_path, "r", encoding="utf-8") as f:
-        user_cfg = yaml_loader.load(f)
+    user_cfg = yaml_loader.load(read_with_encoding_fallback(user_config_path))
 
     changed = False
     for dep, item_name in recipes.items():

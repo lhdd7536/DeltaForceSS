@@ -33,7 +33,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 import pyautogui
 import wegame_switcher
-from utils import jitter_sleep
+from utils import jitter_sleep, read_with_encoding_fallback
 
 
 ACCOUNTS_FILE = os.path.join(PROJECT_ROOT, 'data', 'accounts.yaml')
@@ -41,8 +41,8 @@ USER_CONFIG_FILE = os.path.join(PROJECT_ROOT, 'user_config.yaml')
 
 
 def _load_yaml(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        return _yaml_dumper.load(f) or {}
+    data = _yaml_dumper.load(read_with_encoding_fallback(path))
+    return data or {}
 
 
 def _dump_yaml(path, data):

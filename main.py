@@ -23,7 +23,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 import ctypes
 import sys
-from utils import calc_jitter
+from utils import calc_jitter, read_with_encoding_fallback
 
 try:
     from daily_fetcher import maybe_update_recipes
@@ -62,11 +62,9 @@ class IncorrectResolution(Exception):
         self.message = message
         super().__init__(self.message)
 
-with open(os.path.join(PROJECT_ROOT, 'config.yaml'), 'r', encoding='utf-8') as fin:
-    config = yaml.load(fin, Loader=yaml.FullLoader)
+config = yaml.safe_load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'config.yaml')))
 
-with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'r', encoding='utf-8') as fin:
-    user_config = yaml.load(fin, Loader=yaml.FullLoader)
+user_config = yaml.safe_load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'user_config.yaml')))
 
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'log')
 TESSERACT_PATH = user_config['TESSERACT_PATH']
@@ -119,8 +117,7 @@ def update_wait_list():
                     return
         raise ValueError(f'Incorrect name: {target_name}')
     
-    with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'r', encoding='utf-8') as fin:
-        user_config = yaml.load(fin, Loader=yaml.FullLoader)
+    user_config = yaml.safe_load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'user_config.yaml')))
     
     for dep in ['tech', 'work', 'medical', 'armor']:
         if not user_config[dep]:
@@ -137,8 +134,7 @@ def write_user_config(department):
     yaml.width = 120
     
     # Load the existing config with comments
-    with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'r', encoding='utf-8') as file:
-        user_config = yaml.load(file)
+    user_config = yaml.load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'user_config.yaml')))
 
     if not user_config.get(department):
         return

@@ -30,13 +30,15 @@ sys.path.insert(0, PROJECT_ROOT)
 import yaml
 from ruamel.yaml import YAML
 
+from utils import read_with_encoding_fallback
+
 
 # ── 工具 ──────────────────────────────────────────────
 
 def _load_yaml(path):
-    """加载 YAML 文件"""
-    with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+    """加载 YAML 文件（自动回退编码）"""
+    content = read_with_encoding_fallback(path)
+    return yaml.safe_load(content)
 
 
 def _load_user_config():
@@ -50,8 +52,7 @@ def _read_cache_date():
     """读取 data/last_update_date.txt"""
     cache = os.path.join(PROJECT_ROOT, 'data', 'last_update_date.txt')
     if os.path.exists(cache):
-        with open(cache, 'r', encoding='utf-8') as f:
-            return f.read().strip()
+        return read_with_encoding_fallback(cache).strip()
     return None
 
 
@@ -285,8 +286,7 @@ class MainWindow(tk.Tk):
             yaml_loader = YAML()
             yaml_loader.indent(mapping=2, sequence=4, offset=2)
             yaml_loader.preserve_quotes = True
-            with open(path, 'r', encoding='utf-8') as f:
-                cfg = yaml_loader.load(f)
+            cfg = yaml_loader.load(read_with_encoding_fallback(path))
             cfg['background_mode'] = self.bg_var.get()
             cfg['debug_mode'] = self.debug_var.get()
             with open(path, 'w', encoding='utf-8') as f:
