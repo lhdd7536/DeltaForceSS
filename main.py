@@ -505,12 +505,18 @@ def department_status(dash_img, dep_coords, dep_name=''):
     x, y = dep_coords['timmer']
     w, h = dep_coords['timmer_size']
     timmer_img = cropImage(dash_img, (x, y, w, h))
-    remain_time = OCR_remain_time(timmer_img)
-    print(f'{prefix} [DEBUG department_status] 计时器区域 ({x},{y},{w},{h}) OCR: "{remain_time}"')
-    remain_time = time_to_seconds(remain_time)
+    remain_time_str = OCR_remain_time(timmer_img)
+    print(f'{prefix} [DEBUG department_status] 计时器区域 ({x},{y},{w},{h}) OCR: "{remain_time_str}"')
 
-    if remain_time is None:
+    # OCR 返回 None → 计时器区域空白 → 制造已完成可领取
+    if remain_time_str is None:
         return -1
+
+    # 有文本但无法解析为时间 → OCR 偶发误读，视为进行中，下轮重试
+    remain_time = time_to_seconds(remain_time_str)
+    if remain_time is None:
+        return 999999
+
     return remain_time
 
 def match_list_items():
