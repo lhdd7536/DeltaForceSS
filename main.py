@@ -512,10 +512,11 @@ def department_status(dash_img, dep_coords, dep_name=''):
     if remain_time_str is None:
         return -1
 
-    # 有文本但无法解析为时间 → OCR 偶发误读，视为进行中，下轮重试
+    # 有文本但无法解析为时间格式 → 非空闲中+非合法计时器=已完成
+    #（完成状态的计时器区域是空白，但 OCR 可能捡到残余像素产生 "7" 等噪声）
     remain_time = time_to_seconds(remain_time_str)
     if remain_time is None:
-        return 999999
+        return -1
 
     return remain_time
 
