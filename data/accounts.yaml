@@ -4,21 +4,21 @@ accounts:
       - 953
       - 619
     enabled: true
-    estimated_end: '04:52'
+    estimated_end: '21:20'
     scroll_before_click: 0
   - name: 账号2
     click_pos:
       - 946
       - 660
     enabled: true
-    estimated_end: '04:43'
+    estimated_end: '21:15'
     scroll_before_click: 0
   - name: 账号3
     click_pos:
       - 951
       - 684
     enabled: true
-    estimated_end: '04:44'
+    estimated_end: '21:12'
     scroll_before_click: 0
   # 第4个账号：先向下滚轮1次再点击（位置同第3个账号）
   - name: 账号4
