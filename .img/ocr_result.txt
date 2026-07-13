@@ -1,0 +1,53 @@
+============================================================
+扫描 空闲中.jpg — 找四个部门的空闲中文本
+============================================================
+===== tech左下 region (200,420,160,60) =====
+  y_offset=  5 (screen_y=425): 人
+  y_offset= 15 (screen_y=435): vv erwkijaaa
+  y_offset= 20 (screen_y=440): 人
+  y_offset= 25 (screen_y=445): 一
+  y_offset= 30 (screen_y=450): RAY
+  y_offset= 35 (screen_y=455): 人
+  y_offset= 40 (screen_y=460): on
+  y_offset= 45 (screen_y=465): 四
+  y_offset= 50 (screen_y=470): 四
+  y_offset= 55 (screen_y=475): 四
+
+===== work右下 region (550,420,160,60) =====
+  y_offset=  5 (screen_y=425): 和 II
+  y_offset= 10 (screen_y=430): cy axv“s nn
+  y_offset= 15 (screen_y=435): YA
+  y_offset= 20 (screen_y=440): en
+  y_offset= 25 (screen_y=445): 从”<
+  y_offset= 30 (screen_y=450): FA
+  y_offset= 35 (screen_y=455): qq az-一te
+  y_offset= 40 (screen_y=460): 0
+  y_offset= 45 (screen_y=465): 和
+  y_offset= 50 (screen_y=470): IE
+  y_offset= 55 (screen_y=475): 人
+
+===== medical左下 region (200,770,160,60) =====
+  y_offset=  5 (screen_y=775): 四
+  y_offset= 10 (screen_y=780): 和
+  y_offset= 15 (screen_y=785): 和
+  y_offset= 20 (screen_y=790): ah
+  y_offset= 25 (screen_y=795): 区”和
+  y_offset= 30 (screen_y=800): nn
+  y_offset= 40 (screen_y=810): 四
+  y_offset= 45 (screen_y=815): 和   和
+  y_offset= 50 (screen_y=820): 和    和
+  y_offset= 55 (screen_y=825): 和       和
+
+===== armor右下 region (550,770,180,70) =====
+  y_offset=  5 (screen_y=775): 和 和
+  y_offset= 10 (screen_y=780): 站
+  y_offset= 15 (screen_y=785): Usee< vs
+  y_offset= 20 (screen_y=790): 本
+  y_offset= 25 (screen_y=795): 区
+  y_offset= 30 (screen_y=800): 四
+  y_offset= 40 (screen_y=810): 和   站   和
+  y_offset= 45 (screen_y=815): 和   和   人
+  y_offset= 50 (screen_y=820): 和
+  y_offset= 55 (screen_y=825): 由         和
+  y_offset= 60 (screen_y=830): 和                     四
+  y_offset= 65 (screen_y=835): 和

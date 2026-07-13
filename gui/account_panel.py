@@ -34,6 +34,7 @@ sys.path.insert(0, PROJECT_ROOT)
 import pyautogui
 import wegame_switcher
 from utils import jitter_sleep, read_with_encoding_fallback
+import replenishment
 
 
 ACCOUNTS_FILE = os.path.join(PROJECT_ROOT, 'data', 'accounts.yaml')
@@ -505,6 +506,51 @@ class AccountPanel(ttk.Frame):
         else:
             self._stop_schedule_monitor()
 
+    def _replenish_watchdog(self):
+        """2 点定时器：休眠到每天 2:00，检查补货条件"""
+        while not self._user_stop:
+            now = datetime.now()
+            next_2am = now.replace(hour=2, minute=0, second=0, microsecond=0)
+            if now >= next_2am:
+                next_2am += timedelta(days=1)
+            sleep_seconds = (next_2am - now).total_seconds()
+
+            # 可中断休眠到下次 2:00
+            if self._wait_check(sleep_seconds):
+                return
+
+            # 读取最新配置
+            self._auto_replenish = self._load_auto_replenish()
+            if not self._auto_replenish.get('enabled', False):
+                print('[补货] 自动补货未启用，跳过')
+                continue
+
+            print(f'[补货] 2:00 定时触发，检查调度状态...')
+
+            if self._is_running:
+                # 情况①：制造循环正在运行 → 等制造完再补
+                print('[补货] 制造进行中，标记"制造完成后补货"')
+                self._replenish_after_cycle = True
+            else:
+                # 计算下次制造预约时间
+                self._load_accounts()
+                enabled = [a for a in self.accounts if a.get('enabled', True)]
+                if enabled:
+                    next_mfg = self._calc_next_cycle_time(enabled)
+                    next_mfg_dt = datetime.fromtimestamp(next_mfg)
+                    if next_mfg_dt.hour >= 3:
+                        # 情况②：3 点后才预约 → 直接补货
+                        print(f'[补货] 下次制造预约在 {next_mfg_dt.hour}:{next_mfg_dt.minute:02d}（3 点后），直接补货')
+                        self._start_replenish_cycle()
+                    else:
+                        # 情况③：3 点前有预约 → 等制造完再补
+                        print(f'[补货] 下次制造预约在 {next_mfg_dt.hour}:{next_mfg_dt.minute:02d}（3 点前），等制造完补货')
+                        self._replenish_after_cycle = True
+                else:
+                    # 没有启用账号或没有预约 → 直接补货
+                    print('[补货] 无制造预约，直接开始补货')
+                    self._start_replenish_cycle()
+
     def _schedule_monitor_thread(self):
         """预约监控：等待 → 弹窗确认 → 启动一轮 → 重复"""
         try:
@@ -596,6 +642,11 @@ class AccountPanel(ttk.Frame):
         self.stop_event.clear()
         self._schedule_thread = threading.Thread(target=self._schedule_monitor_thread, daemon=True)
         self._schedule_thread.start()
+
+        if not hasattr(self, '_replenish_watchdog_thread') or not self._replenish_watchdog_thread.is_alive():
+            self._replenish_watchdog_thread = threading.Thread(
+                target=self._replenish_watchdog, daemon=True)
+            self._replenish_watchdog_thread.start()
         print('[多账号] 预约监控已启动')
         self.after(0, lambda: self.status_label.config(text='预约监控中...', foreground='blue'))
 
@@ -638,6 +689,11 @@ class AccountPanel(ttk.Frame):
         self._set_ui_running(True)
         self.scheduler_thread = threading.Thread(target=self._run_one_cycle, daemon=True)
         self.scheduler_thread.start()
+
+        # 启动补货看门狗（守护线程）
+        self._replenish_watchdog_thread = threading.Thread(
+            target=self._replenish_watchdog, daemon=True)
+        self._replenish_watchdog_thread.start()
         print('=== 多账号调度已启动 ===')
 
     def _stop_scheduler(self):
@@ -953,6 +1009,104 @@ class AccountPanel(ttk.Frame):
                     print(f'[多账号] 重试 {self._max_retries} 次后仍有失败，停止重试')
             else:
                 self._retry_count = 0
+            # 制造完成后检查是否有补货待执行
+            if self._replenish_after_cycle:
+                self._replenish_after_cycle = False
+                print('[补货] 制造循环结束，开始执行补货循环')
+                self._run_replenish_cycle()
+            else:
+                self.after(0, self._on_scheduler_stopped)
+
+    def _start_replenish_cycle(self):
+        """启动补货循环"""
+        if self._is_running:
+            return
+        self._user_stop = False
+        self.stop_event.clear()
+        self._set_ui_running(True)
+        self.scheduler_thread = threading.Thread(target=self._run_replenish_cycle, daemon=True)
+        self.scheduler_thread.start()
+        print('=== 补货循环已启动 ===')
+
+
+    def _run_replenish_cycle(self):
+        """补货循环：遍历所有启用账号，登录 -> 补货 -> 退出"""
+        try:
+            self._load_accounts()
+            accounts = [a for a in self.accounts if a.get('enabled', True)]
+            wg_cfg = self.wegame_cfg
+
+            if not accounts:
+                print('[补货] 没有已启用的账号')
+                return
+
+            # 读取阈值和补货量
+            threshold = int(self._replenish_threshold_var.get())
+            qty = int(self._replenish_qty_var.get())
+
+            # 从 config.yaml 加载补货坐标
+            import yaml
+            config = yaml.safe_load(read_with_encoding_fallback(
+                os.path.join(PROJECT_ROOT, 'config.yaml')))
+            replenish_coords = config['replenish_coords']
+
+            for account in accounts:
+                if self._user_stop:
+                    print('[补货] 用户已停止')
+                    return
+
+                name = account.get('name', '未知')
+                print(f'=== 补货 {name}: 开始 ===')
+                self.after(0, lambda n=name: self.status_label.config(
+                    text=f'{n}: 登录中（补货）...', foreground='blue'))
+
+                # 激活 WeGame
+                if not wegame_switcher.activate_wegame(wg_cfg.get('wegame_path', '')):
+                    print(f'{name}: 无法找到/启动 WeGame，跳过')
+                    self.after(0, lambda n=name: self.status_label.config(
+                        text=f'{n}: WeGame 不可用', foreground='red'))
+                    continue
+
+                if self._wait_check(3):
+                    return
+
+                # 步骤 1-8：登录导航（复用现有方法）
+                if not self._login_and_navigate(account, wg_cfg):
+                    print(f'{name}: 导航失败，跳过')
+                    self.after(0, lambda n=name: self.status_label.config(
+                        text=f'{n}: 导航失败', foreground='red'))
+                    continue
+
+                # 步骤 9-17：执行补货
+                print(f'{name}: 执行补货...')
+                self.after(0, lambda n=name: self.status_label.config(
+                    text=f'{n}: 补货中...', foreground='blue'))
+                try:
+                    replenishment.do_replenish_materials(replenish_coords, threshold, qty)
+                except Exception as e:
+                    print(f'{name}: 补货异常: {e}')
+
+                # 退出游戏
+                print(f'{name}: 退出游戏')
+                self._exit_game(wg_cfg.get('exit_method', 'taskkill'))
+                if self._user_stop:
+                    return
+
+                # 退出 WeGame
+                wegame_switcher.exit_wegame()
+                if self._wait_check(3):
+                    return
+
+                print(f'{name}: 补货完成')
+                self.after(0, lambda n=name: self.status_label.config(
+                    text=f'{n}: 补货完成', foreground='green'))
+
+            print('[补货] 所有账号补货完毕')
+            wegame_switcher.exit_wegame()
+
+        except Exception as e:
+            print(f'[补货] 异常: {e}')
+        finally:
             self.after(0, self._on_scheduler_stopped)
 
     def _exit_game(self, exit_method):
