@@ -329,9 +329,12 @@ replenish_coords:
   medical_dep: [555, 680]
   collectibles_tab: [327, 127]
   materials:
-    titanium_alloy: [1173, 481]
-    advanced_fuel: [305, 699]
-  quantity_region: [1596, 775, 9, 17]
+    titanium_alloy:
+      click: [1173, 481]
+      quantity_region: [1668, 774, 12, 19]
+    advanced_fuel:
+      click: [305, 699]
+      quantity_region: [1593, 774, 12, 19]
   increase_btn: [1762, 833]
   fill_btn: [1638, 935]
   buy_btn: [970, 754]

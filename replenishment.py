@@ -63,13 +63,13 @@ def do_replenish_materials(coords, threshold, quantity):
         ('高级燃料', coords['materials']['advanced_fuel']),
     ]
 
-    for name, mat_pos in materials:
+    for name, mat in materials:
         print(f'[补货] 检查 {name}...')
-        click_position(mat_pos)
+        click_position(mat['click'])
         jitter_sleep(1)
 
         # 步骤 14：OCR 当前数量（region 需先缩放）
-        x, y, w, h = coords['quantity_region']
+        x, y, w, h = mat['quantity_region']
         sf = _get_scale_factor()
         sx, sy = int(x * sf), int(y * sf)
         sw, sh = max(1, int(w * sf)), max(1, int(h * sf))
