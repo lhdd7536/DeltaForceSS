@@ -89,6 +89,15 @@ taskkill //f //pid <进程ID>
 5. **退出** — 按配置的 `exit_method` (alt_f4/wm_close/taskkill) 退出游戏
 6. **循环**— 退出 WeGame → 切换到下一账号 → 重复
 
+### 自动补货模式
+
+每日 2:00 定时触发，或通过手动补货按钮启动。按顺序遍历启用账号，登录游戏后导航到军需处 → 收集品界面，检查钛合金和高级燃料库存，低于阈值时自动购买补货。两种材料使用独立的 OCR 坐标：
+
+- 钛合金 `quantity_region: [1668, 774, 12, 19]`
+- 高级燃料 `quantity_region: [1593, 774, 12, 19]`
+
+补货登录跳过"点击特勤处"步骤（由补货流程自行导航），其他登录步骤与制造一致。
+
 ## 核心模块
 
 ### `wegame_switcher.py` — WeGame 窗口管理
@@ -102,6 +111,10 @@ taskkill //f //pid <进程ID>
 - **账号点击** (`scroll_then_click`) — 滚动后点击，用于第 4-5 个账号（超出可视范围需先滚动）
 - **游戏退出** (`exit_game`) — 支持 alt_f4 / wm_close / taskkill 三种退出方式
 - **进程管理** — `exit_wegame()` 强杀 WeGame 进程，`wait_game_exit()` 轮询等待游戏窗口关闭
+
+### `replenishment.py` — 制造材料补货模块
+
+自动导航到军需处 → 收集品界面，OCR 识别钛合金/高级燃料库存数量，低于阈值时自动完成购买流程。坐标从 `config.yaml` 的 `replenish_coords` 加载，每个材料独立的 `quantity_region`。
 
 ### `gui/account_panel.py` — 多账号管理面板
 
@@ -122,8 +135,8 @@ taskkill //f //pid <进程ID>
 
 ## 配置文件
 
-- `config.yaml` — 物品数据库 (`departments`)、屏幕坐标 (`departments_coords`)、各部门 OCR 配置、匹配阈值 (`OCR_factors`)
-- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径、调试/后台模式开关
+- `config.yaml` — 物品数据库 (`departments`)、屏幕坐标 (`departments_coords`)、各部门 OCR 配置、匹配阈值 (`OCR_factors`)、补货坐标 (`replenish_coords` 含各材料 click/quantity_region)
+- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径、调试/后台模式开关、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
 - `data/accounts.yaml` — 多账号配置：
   - `accounts` — 账号列表（名称、点击坐标、是否启用、预计完成时间、滚动次数）
   - `wegame` — WeGame 操作坐标（账号管理按钮、登录按钮、游戏应用等）和各步骤等待时长
@@ -175,3 +188,4 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 | v3.3 | `f6e1b03` | 多账号制造流程重构：启动即走、阶段分组GUI、F8快捷键、可配置等待时长 |
 | v3.4 | `ee842b4` | 修复空闲检测误判：partial_ratio → ratio；auto_run_until_hour 可配置 |
 | v3.5 | `fa5b808` | 修复计时器OCR误读导致部门状态误判；UTF-8编码兼容回退机制；GUI多账号面板新增自动执行时段控件；手动更新配方按钮 |
+| v3.6 | `22c7aa0` | 新增每日自动补货功能：看门狗定时2点触发、独立补货循环、GUI配置阈值/补货量/手动补货按钮；钛合金和高级燃料使用独立quantity_region坐标 |

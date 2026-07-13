@@ -218,7 +218,7 @@ class AccountPanel(ttk.Frame):
         ctrl_row2 = ttk.Frame(ctrl_frame)
         ctrl_row2.pack(fill=tk.X, pady=(0, 2))
         self._replenish_var = tk.BooleanVar(value=self._auto_replenish.get('enabled', False))
-        ttk.Checkbutton(ctrl_row2, text='每日2-5点自动补货',
+        ttk.Checkbutton(ctrl_row2, text='每日2点自动补货',
                         variable=self._replenish_var,
                         command=self._on_replenish_toggle).pack(side=tk.LEFT, padx=(0, 4))
 
@@ -235,6 +235,9 @@ class AccountPanel(ttk.Frame):
         ttk.Spinbox(ctrl_row2, from_=1, to=99, width=3,
                     textvariable=self._replenish_qty_var,
                     command=self._save_user_config).pack(side=tk.LEFT)
+
+        ttk.Button(ctrl_row2, text='手动补货',
+                   command=self._start_replenish_cycle).pack(side=tk.LEFT, padx=(8, 0))
 
         # ── WeGame 配置（按阶段分组，支持滚动） ──
         wg_outer = ttk.LabelFrame(self, text='WeGame 配置', padding=4)
@@ -444,7 +447,7 @@ class AccountPanel(ttk.Frame):
         """自动补货勾选切换时记录日志并保存"""
         enabled = self._replenish_var.get()
         if enabled:
-            print('[多账号] 每日自动补货已启用')
+            print('[多账号] 每日2点自动补货已启用')
         else:
             print('[多账号] 每日自动补货已禁用')
         self._save_user_config()
@@ -538,28 +541,11 @@ class AccountPanel(ttk.Frame):
             print(f'[补货] 2:00 定时触发，检查调度状态...')
 
             if self._is_running:
-                # 情况①：制造循环正在运行 → 等制造完再补
-                print('[补货] 制造进行中，标记"制造完成后补货"')
+                print('[补货] 制造进行中，等制造完成后补货')
                 self._replenish_after_cycle = True
             else:
-                # 计算下次制造预约时间
-                self._load_accounts()
-                enabled = [a for a in self.accounts if a.get('enabled', True)]
-                if enabled:
-                    next_mfg = self._calc_next_cycle_time(enabled)
-                    next_mfg_dt = datetime.fromtimestamp(next_mfg)
-                    if next_mfg_dt.hour >= 3:
-                        # 情况②：3 点后才预约 → 直接补货
-                        print(f'[补货] 下次制造预约在 {next_mfg_dt.hour}:{next_mfg_dt.minute:02d}（3 点后），直接补货')
-                        self._start_replenish_cycle()
-                    else:
-                        # 情况③：3 点前有预约 → 等制造完再补
-                        print(f'[补货] 下次制造预约在 {next_mfg_dt.hour}:{next_mfg_dt.minute:02d}（3 点前），等制造完补货')
-                        self._replenish_after_cycle = True
-                else:
-                    # 没有启用账号或没有预约 → 直接补货
-                    print('[补货] 无制造预约，直接开始补货')
-                    self._start_replenish_cycle()
+                print('[补货] 直接开始补货')
+                self._start_replenish_cycle()
 
     def _schedule_monitor_thread(self):
         """预约监控：等待 → 弹窗确认 → 启动一轮 → 重复"""
@@ -717,8 +703,8 @@ class AccountPanel(ttk.Frame):
         self.btn_start.config(state=state)
         self.btn_stop.config(state=tk.NORMAL if running else tk.DISABLED)
 
-    def _login_and_navigate(self, account, wg_cfg):
-        """步骤 1-9：完整登录导航流程，成功返回 True"""
+    def _login_and_navigate(self, account, wg_cfg, skip_step9=False):
+        """步骤 1-9：完整登录导航流程，成功后返回 True。skip_step9=True 时不点击特勤处（补货用）"""
         name = account.get('name', '未知')
 
         # 步骤 1：点击切换账号按钮（可选）
@@ -822,10 +808,13 @@ class AccountPanel(ttk.Frame):
         wegame_switcher.press_tab()
         jitter_sleep(1)
 
-        # 步骤 9：点击特勤处
-        dash_pos = wg_cfg.get('dash_entry_pos', [600, 350])
-        print(f'{name}: 步骤9 点击特勤处 {dash_pos}')
-        wegame_switcher.click_dash_entry(dash_pos)
+        # 步骤 9：点击特勤处（补货时跳过，由 replenishment 流程自行导航）
+        if not skip_step9:
+            dash_pos = wg_cfg.get('dash_entry_pos', [600, 350])
+            print(f'{name}: 步骤9 点击特勤处 {dash_pos}')
+            wegame_switcher.click_dash_entry(dash_pos)
+        else:
+            print(f'{name}: 步骤9 跳过（补货模式）')
         return True
 
     def _wait_check(self, seconds):
@@ -1080,8 +1069,8 @@ class AccountPanel(ttk.Frame):
                 if self._wait_check(3):
                     return
 
-                # 步骤 1-8：登录导航（复用现有方法）
-                if not self._login_and_navigate(account, wg_cfg):
+                # 步骤 1-8：登录导航（跳过步骤9点击特勤处，由补货流程自行导航）
+                if not self._login_and_navigate(account, wg_cfg, skip_step9=True):
                     print(f'{name}: 导航失败，跳过')
                     self.after(0, lambda n=name: self.status_label.config(
                         text=f'{n}: 导航失败', foreground='red'))

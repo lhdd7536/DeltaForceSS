@@ -23,7 +23,10 @@ if getattr(sys, 'frozen', False):
     _root = os.path.dirname(sys.executable)
 else:
     _root = os.path.dirname(os.path.abspath(__file__))
-_tess_candidate = os.path.join(_root, 'Tesseract-OCR', 'tesseract.exe')
+# 优先 dist/Tesseract-OCR（开发环境），fallback Tesseract-OCR（打包后）
+_tess_candidate = os.path.join(_root, 'dist', 'Tesseract-OCR', 'tesseract.exe')
+if not os.path.exists(_tess_candidate):
+    _tess_candidate = os.path.join(_root, 'Tesseract-OCR', 'tesseract.exe')
 if os.path.exists(_tess_candidate):
     pytesseract.pytesseract.tesseract_cmd = _tess_candidate
 
@@ -89,6 +92,8 @@ def do_replenish_materials(coords, threshold, quantity):
             click_position(coords['increase_btn'])
             jitter_sleep(0.3)
         click_position(coords['fill_btn'])
+        jitter_sleep(1)
+        click_position(coords['buy_btn'])
         jitter_sleep(1)
         click_position(coords['buy_btn'])
         jitter_sleep(2)

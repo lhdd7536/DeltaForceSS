@@ -337,4 +337,4 @@ replenish_coords:
       quantity_region: [1593, 774, 12, 19]
   increase_btn: [1762, 833]
   fill_btn: [1638, 935]
-  buy_btn: [970, 754]
+  buy_btn: [1057, 754]
