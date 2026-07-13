@@ -4,9 +4,11 @@
 
 新增自动补货功能，在多账号模式下，每天 2:00-5:00 窗口自动对每个已启用账号的制造材料（钛合金、高级燃料）进行库存检查，低于阈值时自动补货。
 
-## 配置
+## 配置文件
 
-`user_config.yaml` 新增 `auto_replenish` 段：
+### `user_config.yaml`
+
+新增 `auto_replenish` 段：
 
 ```yaml
 auto_replenish:
@@ -15,11 +17,28 @@ auto_replenish:
   quantity: 3       # "增加购买数量"按钮点击次数
 ```
 
-补货材料固定为钛合金和高级燃料，不进入配置。补货坐标作为模块常量写在 `replenishment.py` 内。
+补货材料固定为钛合金和高级燃料，不进入配置。补货坐标写入 `config.yaml` 的 `replenish_coords` 段。
 
 ## 新增文件：`replenishment.py`
 
-### 坐标常量（基于 1920×1080，运行时缩放）
+### 坐标来源
+
+坐标在 `config.yaml` 的 `replenish_coords` 段中定义（基于 1920×1080 基准），运行时通过 `scale_coords()` 缩放到当前分辨率：
+
+```yaml
+replenish_coords:
+  dep_tab: [580, 55]          # 步骤9 点击部门标签
+  quartermaster: [464, 107]   # 步骤10 点击军需处
+  medical_dep: [555, 680]     # 步骤11 点击医疗部门
+  collectibles_tab: [327, 127] # 步骤12 点击收集品界面
+  materials:
+    titanium_alloy: [1173, 481]  # 钛合金
+    advanced_fuel: [305, 699]    # 高级燃料
+  quantity_region: [1596, 775, 9, 17]  # 步骤14 x,y,w,h
+  increase_btn: [1762, 833]     # 步骤15 增加购买数量
+  fill_btn: [1638, 935]         # 步骤16 一键补齐
+  buy_btn: [970, 754]           # 步骤17 购买
+```
 
 | 步骤 | 描述 | 坐标 |
 |------|------|------|
