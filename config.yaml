@@ -322,3 +322,16 @@ OCR_factors:
   work: 96.5
   medical: 80
   armor: 80
+
+replenish_coords:
+  dep_tab: [580, 55]
+  quartermaster: [464, 107]
+  medical_dep: [555, 680]
+  collectibles_tab: [327, 127]
+  materials:
+    titanium_alloy: [1173, 481]
+    advanced_fuel: [305, 699]
+  quantity_region: [1596, 775, 9, 17]
+  increase_btn: [1762, 833]
+  fill_btn: [1638, 935]
+  buy_btn: [970, 754]
