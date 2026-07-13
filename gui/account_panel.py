@@ -207,33 +207,34 @@ class AccountPanel(ttk.Frame):
         auto_spin.bind('<FocusOut>', lambda e: self._on_auto_hour_changed())
         auto_spin.bind('<Return>', lambda e: self._on_auto_hour_changed())
 
-        # ── 自动补货配置 ──
-        ttk.Separator(ctrl_row, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=(8, 4))
-        self._replenish_var = tk.BooleanVar(value=self._auto_replenish.get('enabled', False))
-        ttk.Checkbutton(ctrl_row, text='每日2-5点自动补货',
-                        variable=self._replenish_var,
-                        command=self._save_user_config).pack(side=tk.LEFT, padx=(0, 4))
-
-        ttk.Label(ctrl_row, text='阈值:').pack(side=tk.LEFT, padx=(4, 2))
-        self._replenish_threshold_var = tk.StringVar(
-            value=str(self._auto_replenish.get('threshold', 3)))
-        ttk.Spinbox(ctrl_row, from_=1, to=99, width=3,
-                    textvariable=self._replenish_threshold_var,
-                    command=self._save_user_config).pack(side=tk.LEFT)
-
-        ttk.Label(ctrl_row, text='补货量:').pack(side=tk.LEFT, padx=(4, 2))
-        self._replenish_qty_var = tk.StringVar(
-            value=str(self._auto_replenish.get('quantity', 3)))
-        ttk.Spinbox(ctrl_row, from_=1, to=99, width=3,
-                    textvariable=self._replenish_qty_var,
-                    command=self._save_user_config).pack(side=tk.LEFT)
-
         self.next_cycle_label = ttk.Label(ctrl_row, text='', foreground='gray')
         self.next_cycle_label.pack(side=tk.LEFT, padx=(10, 0))
 
         # 当前运行状态
         self.status_label = ttk.Label(ctrl_frame, text='就绪', foreground='gray')
         self.status_label.pack(anchor=tk.W, pady=(2, 0))
+
+        # ── 自动补货配置（第二行） ──
+        ctrl_row2 = ttk.Frame(ctrl_frame)
+        ctrl_row2.pack(fill=tk.X, pady=(0, 2))
+        self._replenish_var = tk.BooleanVar(value=self._auto_replenish.get('enabled', False))
+        ttk.Checkbutton(ctrl_row2, text='每日2-5点自动补货',
+                        variable=self._replenish_var,
+                        command=self._on_replenish_toggle).pack(side=tk.LEFT, padx=(0, 4))
+
+        ttk.Label(ctrl_row2, text='阈值:').pack(side=tk.LEFT, padx=(4, 2))
+        self._replenish_threshold_var = tk.StringVar(
+            value=str(self._auto_replenish.get('threshold', 3)))
+        ttk.Spinbox(ctrl_row2, from_=1, to=99, width=3,
+                    textvariable=self._replenish_threshold_var,
+                    command=self._save_user_config).pack(side=tk.LEFT)
+
+        ttk.Label(ctrl_row2, text='补货量:').pack(side=tk.LEFT, padx=(4, 2))
+        self._replenish_qty_var = tk.StringVar(
+            value=str(self._auto_replenish.get('quantity', 3)))
+        ttk.Spinbox(ctrl_row2, from_=1, to=99, width=3,
+                    textvariable=self._replenish_qty_var,
+                    command=self._save_user_config).pack(side=tk.LEFT)
 
         # ── WeGame 配置（按阶段分组，支持滚动） ──
         wg_outer = ttk.LabelFrame(self, text='WeGame 配置', padding=4)
@@ -438,6 +439,15 @@ class AccountPanel(ttk.Frame):
             print(f'[多账号] 自动执行截止时已设为 {self._auto_run_hour} 时')
         except ValueError:
             pass
+
+    def _on_replenish_toggle(self):
+        """自动补货勾选切换时记录日志并保存"""
+        enabled = self._replenish_var.get()
+        if enabled:
+            print('[多账号] 每日自动补货已启用')
+        else:
+            print('[多账号] 每日自动补货已禁用')
+        self._save_user_config()
 
     # ── WeGame 配置 ────────────────────────────────────
 
