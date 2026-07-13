@@ -168,6 +168,7 @@ def write_user_config(department):
 valid_resolution = {(1920, 1080), (2560, 1440), (3840, 2160)}
 def set_screen_resolution():
     width, height = pyautogui.size()
+    print(f'[DEBUG] pyautogui.size() = {width}x{height}')
     if (width, height) not in valid_resolution:
         raise IncorrectResolution(f'非法分辨率: {width}x{height}, 只支持 {valid_resolution}\n以游戏分辨率为准')
     global scale_factor
