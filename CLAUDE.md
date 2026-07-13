@@ -151,6 +151,14 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 - **空闲检测** (`OCR_is_free`) 使用 `fuzz.ratio`（完整匹配），阈值 > 60，避免单字子串误匹配为"空闲中"
 - **物品名称匹配** (`best_match_item`) 使用 `fuzz.ratio`，配合各部门独立的 `OCR_factors` 阈值
+- **计时器 OCR** — OCR 识别制造剩余时间（格式 `MM:SS`），用于判断部门状态是"进行中"还是"已完成"。需注意 OCR 误读（如 `O` → `0`、`l` → `1`）可能导致完成状态被误判为进行中，影响成品领取
+
+### UTF-8 编码兼容
+
+`utils.py` 中的文件读取操作使用编码自动检测回退机制：
+1. 优先尝试 UTF-8 编码读取
+2. 若失败则使用 `chardet` 自动检测编码后重试
+3. 避免 GBK 编码文件在 UTF-8 模式下直接崩溃
 
 ## 测试
 
@@ -166,3 +174,4 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 | v3.2 | `890c7cd` | 原仓库最新版本 (S9 赛季) |
 | v3.3 | `f6e1b03` | 多账号制造流程重构：启动即走、阶段分组GUI、F8快捷键、可配置等待时长 |
 | v3.4 | `ee842b4` | 修复空闲检测误判：partial_ratio → ratio；auto_run_until_hour 可配置 |
+| v3.5 | `fa5b808` | 修复计时器OCR误读导致部门状态误判；UTF-8编码兼容回退机制；GUI多账号面板新增自动执行时段控件；手动更新配方按钮 |
