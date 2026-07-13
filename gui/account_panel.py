@@ -69,6 +69,9 @@ class AccountPanel(ttk.Frame):
         self.accounts = []
         self._load_accounts()
         self._auto_run_hour = self._load_auto_hour()
+        # 补货配置
+        self._auto_replenish = self._load_auto_replenish()
+        self._replenish_after_cycle = False
         self._build_ui()
 
     # ── 数据加载/保存 ──────────────────────────────────
@@ -100,11 +103,24 @@ class AccountPanel(ttk.Frame):
         except Exception:
             return 10
 
+    def _load_auto_replenish(self):
+        """从 user_config.yaml 加载自动补货配置"""
+        try:
+            cfg = _load_yaml(USER_CONFIG_FILE)
+            return cfg.get('auto_replenish', {'enabled': False, 'threshold': 3, 'quantity': 3})
+        except Exception:
+            return {'enabled': False, 'threshold': 3, 'quantity': 3}
+
     def _save_user_config(self):
         """保存 auto_run_until_hour 到 user_config.yaml"""
         try:
             cfg = _load_yaml(USER_CONFIG_FILE)
             cfg['auto_run_until_hour'] = self._auto_run_hour
+            cfg['auto_replenish'] = {
+                'enabled': self._replenish_var.get(),
+                'threshold': int(self._replenish_threshold_var.get()),
+                'quantity': int(self._replenish_qty_var.get()),
+            }
             _dump_yaml(USER_CONFIG_FILE, cfg)
         except Exception as e:
             print(f'[多账号] 保存 auto_run_until_hour 失败: {e}')
@@ -189,6 +205,27 @@ class AccountPanel(ttk.Frame):
         auto_spin.pack(side=tk.LEFT)
         auto_spin.bind('<FocusOut>', lambda e: self._on_auto_hour_changed())
         auto_spin.bind('<Return>', lambda e: self._on_auto_hour_changed())
+
+        # ── 自动补货配置 ──
+        ttk.Separator(ctrl_row, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=(8, 4))
+        self._replenish_var = tk.BooleanVar(value=self._auto_replenish.get('enabled', False))
+        ttk.Checkbutton(ctrl_row, text='每日2-5点自动补货',
+                        variable=self._replenish_var,
+                        command=self._save_user_config).pack(side=tk.LEFT, padx=(0, 4))
+
+        ttk.Label(ctrl_row, text='阈值:').pack(side=tk.LEFT, padx=(4, 2))
+        self._replenish_threshold_var = tk.StringVar(
+            value=str(self._auto_replenish.get('threshold', 3)))
+        ttk.Spinbox(ctrl_row, from_=1, to=99, width=3,
+                    textvariable=self._replenish_threshold_var,
+                    command=self._save_user_config).pack(side=tk.LEFT)
+
+        ttk.Label(ctrl_row, text='补货量:').pack(side=tk.LEFT, padx=(4, 2))
+        self._replenish_qty_var = tk.StringVar(
+            value=str(self._auto_replenish.get('quantity', 3)))
+        ttk.Spinbox(ctrl_row, from_=1, to=99, width=3,
+                    textvariable=self._replenish_qty_var,
+                    command=self._save_user_config).pack(side=tk.LEFT)
 
         self.next_cycle_label = ttk.Label(ctrl_row, text='', foreground='gray')
         self.next_cycle_label.pack(side=tk.LEFT, padx=(10, 0))
