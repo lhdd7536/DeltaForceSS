@@ -4,21 +4,21 @@ accounts:
       - 953
       - 619
     enabled: true
-    estimated_end: '21:20'
+    estimated_end: '05:53'
     scroll_before_click: 0
   - name: 账号2
     click_pos:
       - 946
       - 660
     enabled: true
-    estimated_end: '21:15'
+    estimated_end: '05:49'
     scroll_before_click: 0
   - name: 账号3
     click_pos:
       - 951
       - 684
     enabled: true
-    estimated_end: '21:12'
+    estimated_end: '—'
     scroll_before_click: 0
   # 第4个账号：先向下滚轮1次再点击（位置同第3个账号）
   - name: 账号4
@@ -26,7 +26,7 @@ accounts:
       - 951
       - 684
     enabled: true
-    estimated_end: '04:40'
+    estimated_end: '05:49'
     scroll_before_click: 1
   # 第5个账号：先向下滚轮2次再点击（位置同第3个账号）
   - name: 账号5
@@ -34,7 +34,7 @@ accounts:
       - 951
       - 684
     enabled: false
-    estimated_end: '02:49'
+    estimated_end: '05:53'
     scroll_before_click: 2
 wegame:
   switch_account_btn_pos:

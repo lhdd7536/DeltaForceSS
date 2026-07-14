@@ -338,3 +338,6 @@ replenish_coords:
   increase_btn: [1762, 833]
   fill_btn: [1638, 935]
   buy_btn: [1057, 754]
+  warehouse_tab: [319, 50]
+  sort_btn: [1210, 904]
+  confirm_sort: [1749, 957]

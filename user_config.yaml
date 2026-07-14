@@ -15,8 +15,12 @@ medical:
 armor:
 # 防具台
   - [精英防弹背心, -1]
-auto_run_until_hour: 10
+auto_run_until_hour: 11
 TESSERACT_PATH: Tesseract-OCR\tesseract.exe
 hotkey: f8
 background_mode: false
 debug_mode: false
+auto_replenish:
+  enabled: true
+  threshold: 3
+  quantity: 2

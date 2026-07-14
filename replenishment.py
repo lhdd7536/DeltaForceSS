@@ -15,6 +15,7 @@ import pyautogui
 import pytesseract
 import sys
 from PIL import ImageGrab
+import keyboard
 from wegame_switcher import click_position
 from utils import jitter_sleep
 
@@ -98,6 +99,20 @@ def do_replenish_materials(coords, threshold, quantity):
         click_position(coords['buy_btn'])
         jitter_sleep(2)
         print(f'[补货] {name} 已购买')
+
+    # 步骤 18-21：整理仓库
+    print('[补货] 步骤18: 按 ESC')
+    keyboard.send('esc')
+    jitter_sleep(1)
+    print('[补货] 步骤19: 点击仓库')
+    click_position(coords['warehouse_tab'])
+    jitter_sleep(1)
+    print('[补货] 步骤20: 点击整理')
+    click_position(coords['sort_btn'])
+    jitter_sleep(1)
+    print('[补货] 步骤21: 确认整理')
+    click_position(coords['confirm_sort'])
+    jitter_sleep(1)
 
     print('[补货] 全部材料处理完毕')
 
