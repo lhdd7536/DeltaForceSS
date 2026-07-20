@@ -216,6 +216,7 @@ class MainWindow(tk.Tk):
 
         self.bg_var = tk.BooleanVar(value=False)
         self.debug_var = tk.BooleanVar(value=False)
+        self.auto_update_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(ctrl, text='后台模式', variable=self.bg_var, command=self._on_bg_toggle).pack(anchor=tk.W)
         ttk.Checkbutton(ctrl, text='调试模式', variable=self.debug_var, command=self._on_debug_toggle).pack(anchor=tk.W)
 
@@ -227,11 +228,16 @@ class MainWindow(tk.Tk):
         recipe = ttk.LabelFrame(top, text='今日推荐配方', padding=self.PADDING)
         recipe.grid(row=0, column=1, sticky='nsew')
 
-        # 头部：更新时间 + 手动更新按钮
+        # 头部：更新时间 + 自动更新勾选 + 手动更新按钮
         recipe_header = ttk.Frame(recipe)
         recipe_header.pack(fill=tk.X)
         self.update_time_label = ttk.Label(recipe_header, text='更新于: --')
         self.update_time_label.pack(side=tk.LEFT)
+        self.auto_update_cb = ttk.Checkbutton(
+            recipe_header, text='自动更新', variable=self.auto_update_var,
+            command=self._on_auto_update_toggle
+        )
+        self.auto_update_cb.pack(side=tk.RIGHT, padx=(0, 4))
         self.update_btn = ttk.Button(recipe_header, text='手动更新', command=self._manual_update_recipes)
         self.update_btn.pack(side=tk.RIGHT)
 
@@ -276,6 +282,7 @@ class MainWindow(tk.Tk):
             cfg = _load_user_config()
             self.bg_var.set(cfg.get('background_mode', False))
             self.debug_var.set(cfg.get('debug_mode', False))
+            self.auto_update_var.set(cfg.get('auto_update_recipes', True))
         except Exception:
             pass
 
@@ -289,6 +296,7 @@ class MainWindow(tk.Tk):
             cfg = yaml_loader.load(read_with_encoding_fallback(path))
             cfg['background_mode'] = self.bg_var.get()
             cfg['debug_mode'] = self.debug_var.get()
+            cfg['auto_update_recipes'] = self.auto_update_var.get()
             with open(path, 'w', encoding='utf-8') as f:
                 yaml_loader.dump(cfg, f)
         except Exception as e:
@@ -299,6 +307,10 @@ class MainWindow(tk.Tk):
 
     def _on_debug_toggle(self):
         self._save_config()
+
+    def _on_auto_update_toggle(self):
+        self._save_config()
+        print(f'[GUI] 自动更新配方: {"开启" if self.auto_update_var.get() else "关闭"}')
 
     # ── 快捷键 ────────────────────────────────────────────
 

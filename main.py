@@ -747,14 +747,17 @@ def main(stop_event=None, status_callback=None, single_cycle=False):
     _global_stop_event = stop_event
 
     print('###### 程序初始化 ######')
-    # 每天首次运行时，从 orzice.com 获取今日制造推荐
-    if _HAS_FETCHER:
-        try:
-            maybe_update_recipes()
-        except Exception as e:
-            print(f"[WARN] 获取今日配方失败: {e}，将使用现有配置继续")
+    # 自动更新推荐配方（由 user_config.yaml 中的 auto_update_recipes 控制）
+    if user_config.get('auto_update_recipes', True):
+        if _HAS_FETCHER:
+            try:
+                maybe_update_recipes()
+            except Exception as e:
+                print(f"[WARN] 获取今日配方失败: {e}，将使用现有配置继续")
+        else:
+            print("[INFO] daily_fetcher 未就绪（缺少依赖？），跳过自动更新")
     else:
-        print("[INFO] daily_fetcher 未就绪（缺少依赖？），跳过自动更新")
+        print("[INFO] 自动更新配方已关闭（auto_update_recipes=false），跳过")
     background_mode = user_config['background_mode']
     hwnd = win32gui.FindWindow('UnrealWindow', '三角洲行动  ')
 
