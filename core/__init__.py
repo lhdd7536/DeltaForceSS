@@ -7,5 +7,4 @@
 - automator — 单账号制造业务流程
 - wegame_switcher — WeGame 窗口管理
 - replenishment — 制造材料补货
-- daily_fetcher — 每日推荐配方抓取
 """

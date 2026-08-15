@@ -21,7 +21,7 @@ import win32con
 # 项目根目录（源码/EXE 模式统一由 utils 定位）
 # 先确保 utils 所在目录可导入（直接以脚本方式运行时也成立）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, read_with_encoding_fallback
+from core.utils import project_root, load_yaml, load_ruamel, dump_yaml_rt
 
 PROJECT_ROOT = project_root()
 
@@ -36,16 +36,6 @@ def _load_yaml(path):
 def _load_user_config():
     """加载用户配置"""
     return _load_yaml(os.path.join(PROJECT_ROOT, 'user_config.yaml'))
-
-
-# ── 日期格式化 ────────────────────────────────────────
-
-def _read_cache_date():
-    """读取 data/last_update_date.txt"""
-    cache = os.path.join(PROJECT_ROOT, 'data', 'last_update_date.txt')
-    if os.path.exists(cache):
-        return read_with_encoding_fallback(cache).strip()
-    return None
 
 
 # ── MainWindow ────────────────────────────────────────
@@ -208,7 +198,6 @@ class MainWindow(tk.Tk):
 
         self.bg_var = tk.BooleanVar(value=False)
         self.debug_var = tk.BooleanVar(value=False)
-        self.auto_update_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(ctrl, text='后台模式', variable=self.bg_var, command=self._on_bg_toggle).pack(anchor=tk.W)
         ttk.Checkbutton(ctrl, text='调试模式', variable=self.debug_var, command=self._on_debug_toggle).pack(anchor=tk.W)
 
@@ -216,22 +205,9 @@ class MainWindow(tk.Tk):
         self.hotkey_hint = ttk.Label(ctrl, text='快捷键: F8', foreground='gray')
         self.hotkey_hint.pack(anchor=tk.W)
 
-        # 推荐配方（紧凑，不扩展）
-        recipe = ttk.LabelFrame(top, text='今日推荐配方', padding=self.PADDING)
+        # 制造配方（紧凑，不扩展；静态显示 user_config 中的制造队列）
+        recipe = ttk.LabelFrame(top, text='制造配方', padding=self.PADDING)
         recipe.grid(row=0, column=1, sticky='nsew')
-
-        # 头部：更新时间 + 自动更新勾选 + 手动更新按钮
-        recipe_header = ttk.Frame(recipe)
-        recipe_header.pack(fill=tk.X)
-        self.update_time_label = ttk.Label(recipe_header, text='更新于: --')
-        self.update_time_label.pack(side=tk.LEFT)
-        self.auto_update_cb = ttk.Checkbutton(
-            recipe_header, text='自动更新', variable=self.auto_update_var,
-            command=self._on_auto_update_toggle
-        )
-        self.auto_update_cb.pack(side=tk.RIGHT, padx=(0, 4))
-        self.update_btn = ttk.Button(recipe_header, text='手动更新', command=self._manual_update_recipes)
-        self.update_btn.pack(side=tk.RIGHT)
 
         recipe_grid = ttk.Frame(recipe)
         recipe_grid.pack(fill=tk.BOTH, expand=True)
@@ -274,7 +250,6 @@ class MainWindow(tk.Tk):
             cfg = _load_user_config()
             self.bg_var.set(cfg.get('background_mode', False))
             self.debug_var.set(cfg.get('debug_mode', False))
-            self.auto_update_var.set(cfg.get('auto_update_recipes', True))
         except Exception:
             pass
 
@@ -285,7 +260,6 @@ class MainWindow(tk.Tk):
             cfg = load_ruamel(path)
             cfg['background_mode'] = self.bg_var.get()
             cfg['debug_mode'] = self.debug_var.get()
-            cfg['auto_update_recipes'] = self.auto_update_var.get()
             dump_yaml_rt(path, cfg)
         except Exception as e:
             print(f'[GUI] 保存配置失败: {e}')
@@ -295,10 +269,6 @@ class MainWindow(tk.Tk):
 
     def _on_debug_toggle(self):
         self._save_config()
-
-    def _on_auto_update_toggle(self):
-        self._save_config()
-        print(f'[GUI] 自动更新配方: {"开启" if self.auto_update_var.get() else "关闭"}')
 
     # ── 快捷键 ────────────────────────────────────────────
 
@@ -334,10 +304,10 @@ class MainWindow(tk.Tk):
             print('[GUI] 快捷键: 启动')
             self._start_automation()
 
-    # ── 推荐配方显示 ────────────────────────────────────
+    # ── 制造配方显示 ────────────────────────────────────
 
     def _refresh_recipe_display(self):
-        """读取 user_config.yaml 更新推荐配方显示"""
+        """读取 user_config.yaml 更新制造配方显示"""
         try:
             cfg = _load_user_config()
             for dep in ['tech', 'work', 'medical', 'armor']:
@@ -347,41 +317,8 @@ class MainWindow(tk.Tk):
                 else:
                     name = '(空)'
                 self.recipe_labels[dep].config(text=name)
-
-            cache_date = _read_cache_date()
-            if cache_date:
-                self.update_time_label.config(text=f'更新于: {cache_date}')
-            else:
-                self.update_time_label.config(text='今天尚未更新')
         except Exception as e:
-            print(f'[GUI] 加载推荐配方失败: {e}')
-
-    # ── 手动更新配方 ────────────────────────────────────
-
-    def _manual_update_recipes(self):
-        """手动更新配方按钮回调"""
-        if hasattr(self, '_update_thread') and self._update_thread and self._update_thread.is_alive():
-            print('[GUI] 配方更新正在进行中...')
-            return
-
-        self.update_btn.config(state=tk.DISABLED, text='更新中...')
-        self._update_thread = threading.Thread(target=self._run_manual_update, daemon=True)
-        self._update_thread.start()
-
-    def _run_manual_update(self):
-        """后台线程：执行配方拉取"""
-        try:
-            from daily_fetcher import force_update_recipes
-            force_update_recipes()
-        except Exception as e:
-            print(f'[GUI] 手动更新配方失败: {e}')
-        finally:
-            self.after(0, self._on_update_complete)
-
-    def _on_update_complete(self):
-        """更新完成后刷新 UI"""
-        self.update_btn.config(state=tk.NORMAL, text='手动更新')
-        self._refresh_recipe_display()
+            print(f'[GUI] 加载制造配方失败: {e}')
 
     # ── 线程控制 ────────────────────────────────────────
 

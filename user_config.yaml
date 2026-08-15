@@ -20,7 +20,6 @@ TESSERACT_PATH: Tesseract-OCR\tesseract.exe
 hotkey: f8
 background_mode: false
 debug_mode: false
-auto_update_recipes: false
 auto_replenish:
   enabled: true
   threshold: 3

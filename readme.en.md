@@ -29,12 +29,6 @@ Automates manufacturing across multiple accounts via WeGame account switching:
 - Scheduled loop: auto-arranges the next round based on estimated completion times; runs without popups before `auto_run_until_hour`
 - Accounts beyond the visible list (4th/5th) log in via a "scroll before click" setting
 
-### Daily Recommended Recipe Fetcher
-Automatically fetches the daily recommended manufacturing recipes from orzice.com/v/rb:
-- Renders the page with Playwright + parses with BeautifulSoup, fuzzy-matched against the `config.yaml` item database
-- Writes to the `user_config.yaml` manufacturing queue (Tech Center always keeps its configured default)
-- Toggleable auto-update in the GUI (default on), plus a "Manual Update" button
-
 ### Daily Auto-Replenishment
 At a scheduled time (default 2:00 AM), logs into each account and navigates to Quartermaster → Collectibles to check titanium alloy and advanced fuel stock, auto-buying when below the threshold:
 - **Scheduling watchdog** — triggers at 2:00 AM daily (waits for the current manufacturing cycle to finish if running)
@@ -44,7 +38,7 @@ At a scheduled time (default 2:00 AM), logs into each account and navigates to Q
 
 ### GUI Interface
 Tkinter-based graphical interface with:
-- **Single-Account tab**: start/stop controls, status indicator, background/debug mode toggles, today's recommended recipes (update time + auto/manual update), run logs
+- **Single-Account tab**: start/stop controls, status indicator, background/debug mode toggles, manufacturing recipe display, run logs
 - **Multi-Account tab**: account list management, schedule controls, replenishment config (threshold/quantity/manual button), WeGame coordinates grouped by phase (with "capture mouse position" support)
 - F8 global hotkey (configurable via `hotkey` in `user_config.yaml`), with instant stop response
 
@@ -82,7 +76,6 @@ Advanced settings (keep defaults recommended):
 - `background_mode` — Default `false`; minimizes game after each cycle
 - `debug_mode` — Default `false`; saves screenshots to `./log/`
 - `hotkey` — global hotkey (default `f8`)
-- `auto_update_recipes` — daily recipe auto-update (default `true`)
 - `auto_replenish` — replenishment config (`enabled` switch, `threshold`, `quantity`)
 
 ### 3. Run
@@ -119,7 +112,6 @@ Advanced settings (keep defaults recommended):
 - GUI interface (real-time logs and status feedback)
 - PyInstaller EXE packaging
 - Auto-focus and minimize
-- Daily recommended recipe fetching (manual update supported)
 - Daily auto-replenishment (titanium alloy/advanced fuel, configurable threshold)
 - Auto warehouse sorting after replenishment
 

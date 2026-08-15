@@ -9,7 +9,7 @@ Delta Force 三角洲行动 自动化制造脚本。支持两种工作模式：
 1. **单账号制造** — 截图 → OCR 文字识别 → 模拟鼠标键盘操作，自动完成游戏内制造流程
 2. **多账号批量制造** — 通过 WeGame 账号切换，按顺序登录多个账号分别执行制造流程
 
-辅助功能：**每日推荐配方自动抓取**（orzice.com）、**每日自动补货**（钛合金/高级燃料，2:00 定时）、**PyInstaller EXE 打包**。
+辅助功能：**每日自动补货**（钛合金/高级燃料，2:00 定时）、**PyInstaller EXE 打包**。
 
 ## 运行环境
 
@@ -17,7 +17,6 @@ Delta Force 三角洲行动 自动化制造脚本。支持两种工作模式：
 - **OS**: Windows only (uses pywin32, keyboard, pyautogui, psutil)
 - **Tesseract-OCR**: bundled at `dist/Tesseract-OCR/`；统一由 `utils.resolve_tesseract_path()` 定位（配置路径 → `dist/Tesseract-OCR` → 项目根 `Tesseract-OCR`）
 - **Setup**: `conda run -n deltaforce pip install -r requirements.txt`
-- **可选依赖**: `playwright`（每日推荐抓取用，未安装时自动跳过该功能）
 
 ## 运行方式
 
@@ -28,7 +27,7 @@ set PYTHONIOENCODING=utf-8
 D:/Anaconda3/envs/deltaforce/python.exe gui/app.py
 ```
 
-GUI 基于 tkinter，包含"单账号"标签页（启动/停止控制、后台/调试模式开关、今日推荐配方、运行日志）和"多账号"标签页（账号列表管理、循环调度、自动补货配置、WeGame 配置）。**默认启动方式，直接运行即可。**
+GUI 基于 tkinter，包含"单账号"标签页（启动/停止控制、后台/调试模式开关、制造配方、运行日志）和"多账号"标签页（账号列表管理、循环调度、自动补货配置、WeGame 配置）。**默认启动方式，直接运行即可。**
 
 ### 后台 CLI 模式（仅调试用）
 
@@ -69,7 +68,7 @@ taskkill //f //pid <进程ID>
 
 ### 单账号模式（`core/automator.py` 业务流程 + `main.py` 薄壳入口）
 
-代码已按职责拆分并收敛为 `core/` 包：`core/utils`（共享工具）、`core/config_store`（配置与全局状态）、`core/vision`（截图/图像）、`core/ocr`（识别/匹配）、`core/automator`（业务流程）、`core/wegame_switcher`（WeGame 窗口管理）、`core/replenishment`（补货）、`core/daily_fetcher`（每日配方）。`main.py` 为薄壳（主循环入口 + 调试函数），`gui/` 为界面，`tests/` 为 pytest 测试，`scripts/` 为调试脚本，`packaging/` 为打包钩子。
+代码已按职责拆分并收敛为 `core/` 包：`core/utils`（共享工具）、`core/config_store`（配置与全局状态）、`core/vision`（截图/图像）、`core/ocr`（识别/匹配）、`core/automator`（业务流程）、`core/wegame_switcher`（WeGame 窗口管理）、`core/replenishment`（补货）。`main.py` 为薄壳（主循环入口 + 调试函数），`gui/` 为界面，`tests/` 为 pytest 测试，`scripts/` 为调试脚本，`packaging/` 为打包钩子。
 
 核心流程如下：
 
@@ -97,13 +96,6 @@ taskkill //f //pid <进程ID>
 7. **循环** — 所有账号处理完后，若账号间 `estimated_end` 相差超过 8h 判定有账号制造失败（`_cycle_has_failure`）；预约模式下失败自动重试，最多 3 轮
 
 **循环执行（预约监控）** — GUI 勾选"循环执行"后启动监控线程：按所有账号 `estimated_end` 最晚时间 + 1 分钟计算下次执行；`auto_run_until_hour` 之前自动执行不弹窗，之后弹窗确认（`messagebox.askyesno`）；无完成时间记录时降级用 `loop_interval` 固定间隔（默认 28800s）。
-
-### 每日推荐配方 (`daily_fetcher.py`)
-
-- 数据源：orzice.com/v/rb（Playwright 加载 Vue SPA 渲染后的 HTML，`channel="chrome"` headless）
-- 解析：BeautifulSoup 按 `.box` / `.orzice-list-title` / `.list-item-title` 提取四大台（技术中心/工作台/制药台/防具台）推荐物品
-- 匹配：网站物品名与 `config.yaml` 已有物品 `fuzz.ratio` 匹配（阈值 60），取最高分者写入 `user_config.yaml`（**tech 始终跳过**，使用配置默认制造）
-- 触发：`main()` 启动时若 `auto_update_recipes: true` 调用 `maybe_update_recipes()`（每天一次，日期缓存 `data/last_update_date.txt`）；GUI"手动更新"按钮调用 `force_update_recipes()`（忽略日期检查）
 
 ### 自动补货模式
 
@@ -153,10 +145,6 @@ taskkill //f //pid <进程ID>
 
 自动导航到军需处 → 收集品界面，OCR 识别钛合金/高级燃料库存数量（`OCR_quantity`，`--psm 7` 数字白名单），低于阈值时点击增加数量/一键补齐/购买完成补货。坐标从 `config.yaml` 的 `replenish_coords` 加载，每个材料独立的 `quantity_region`（`click_position` 内部缩放，region 在本模块内缩放）。
 
-### `core/daily_fetcher.py` — 每日推荐配方抓取
-
-见上文"每日推荐配方"小节。入口：`maybe_update_recipes()`（自动）/ `force_update_recipes()`（手动）。
-
 ### `core/utils.py` — 共享工具（全项目统一复用）
 
 - `project_root()` — 项目根目录（源码模式为仓库根，EXE 模式为 EXE 所在目录），所有模块统一通过它定位资源
@@ -176,7 +164,7 @@ taskkill //f //pid <进程ID>
 
 `MainWindow` 类（tk.Tk），应用主入口：
 
-- **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、后台模式/调试模式勾选（写回 `user_config.yaml`）、快捷键提示、今日推荐配方面板（更新时间、自动更新勾选、手动更新按钮，后台线程调 `force_update_recipes`）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
+- **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、后台模式/调试模式勾选（写回 `user_config.yaml`）、快捷键提示、制造配方面板（静态显示 `user_config.yaml` 四部门队列）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
 - **多账号标签页** — AccountPanel 实例
 - **快捷键** — 从 `user_config.yaml` 的 `hotkey` 字段读取（默认 `f8`），绑定切换启动/停止（单账号运行中→停止；多账号运行中→停止调度；否则启动单账号）
 
@@ -193,7 +181,7 @@ taskkill //f //pid <进程ID>
 ## 配置文件
 
 - `config.yaml` — 物品数据库 (`departments`，按部门/类别分级，S10 赛季物品)、屏幕坐标 (`departments_coords`：dash_page 各部门 free/timmer 区域、列表 list_point/list_size/item_size、交易行 price/buy、build_position、tech_dep_region)、各部门 OCR 配置 (`OCR_configs`) 与匹配阈值 (`OCR_factors`：tech 71 / work 96.5 / medical 80 / armor 80)、补货坐标 (`replenish_coords` 含各材料 click/quantity_region)
-- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`，`[物品名, 数量]`，-1 为无限)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径 (`TESSERACT_PATH`)、快捷键 (`hotkey`)、调试/后台模式开关 (`debug_mode` / `background_mode`)、自动更新配方 (`auto_update_recipes`)、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
+- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`，`[物品名, 数量]`，-1 为无限)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径 (`TESSERACT_PATH`)、快捷键 (`hotkey`)、调试/后台模式开关 (`debug_mode` / `background_mode`)、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
 - `data/accounts.yaml` — 多账号配置：
   - `accounts` — 账号列表（名称、点击坐标 `click_pos`、是否启用、预计完成时间 `estimated_end`、滚动次数 `scroll_before_click`）
   - `wegame` — WeGame 操作坐标（`switch_account_btn_pos`、`login_btn_pos`、`game_app_pos`、`launch_btn_pos`、`mode_btn_pos`、`dash_entry_pos`）和各步骤等待时长（`wait_before_app`、`wait_game_launch`、`wait_before_space`）、`exit_method`、`loop_interval`、`wegame_path`
@@ -236,7 +224,7 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 ## 测试
 
-- **pytest 单元测试**（`tests/`，纯逻辑、不依赖游戏环境）— `tests/test_utils.py`（抖动/编码/YAML 往返/Tesseract 定位）、`tests/test_ocr.py`（best_match_item / time_to_seconds）、`tests/test_daily_fetcher.py`（parse_recipes / match_site_to_config / load_config_departments）。运行：`conda run -n deltaforce python -m pytest tests`（pytest 见 `requirements-dev.txt`）
+- **pytest 单元测试**（`tests/`，纯逻辑、不依赖游戏环境）— `tests/test_utils.py`（抖动/编码/YAML 往返/Tesseract 定位）、`tests/test_ocr.py`（best_match_item / time_to_seconds）。运行：`conda run -n deltaforce python -m pytest tests`（pytest 见 `requirements-dev.txt`）
 - `list_OCR_test(department, categories)` — 验证指定部门物品类别的 OCR 识别效果
 - `test1()` — 枚举所有可见 Windows 窗口
 - `test2()` — 验证配置加载和 user_config 更新
