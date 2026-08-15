@@ -1,7 +1,6 @@
-requests==2.32.3
+# 核心依赖（全部为运行必需）
+# 可选依赖（每日推荐配方抓取）见 requirements-optional.txt
 beautifulsoup4==4.13.4
-playwright==1.60.0
-dxcam==0.0.5
 keyboard==0.13.5
 numpy==2.2.4
 opencv_python==4.11.0.86

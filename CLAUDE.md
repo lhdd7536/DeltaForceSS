@@ -67,7 +67,9 @@ taskkill //f //pid <进程ID>
 
 ## 架构说明
 
-### 单账号模式 (`main.py`)
+### 单账号模式（`automator.py` 业务流程 + `main.py` 薄壳入口）
+
+代码已按职责拆分（原 894 行 `main.py` → 5 个模块）：`config_store`（配置与全局状态）、`vision`（截图/图像）、`ocr`（识别/匹配）、`automator`（业务流程）、`main.py`（薄壳：主循环入口 + 调试函数）。
 
 核心流程如下：
 
@@ -114,9 +116,25 @@ taskkill //f //pid <进程ID>
 
 ## 核心模块
 
-### `main.py` — 单账号制造主循环
+### `main.py` — 单账号模式入口（薄壳）
 
-含主循环、dash_page/list_page 导航、OCR 识别（`OCR_is_free` / `OCR_item_name` / `OCR_remain_time` / `OCR_price`）、自动购买、截图（`screenshot()`：PIL `ImageGrab.grab()` → OpenCV 灰度/Otsu 二值化，debug_mode 下保存 original/gray/binary/combinedBinary 到 `log/`）、配置读写（`write_user_config()` 用 ruamel.yaml 保留注释与 flow style）。
+仅保留：主循环入口 `main()`（GUI / 多账号模块通过 `import main as auto_module; auto_module.main(...)` 调用）、调试测试函数（`list_OCR_test` / `test1` / `test2`）与命令行入口。业务逻辑已拆至以下模块：
+
+### `automator.py` — 单账号制造业务流程
+
+主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、蜂鸣与 `alt_tab`。状态经 `import config_store as cs` 实时访问。
+
+### `config_store.py` — 配置与全局状态
+
+集中管理 `config` / `user_config` / `OUTPUT_DIR` / `TESSERACT_PATH` / `scale_factor` / `departments_coords` / `debug_mode` / `wait_list` / `_global_stop_event` 的加载与读写（import 时加载，与原 main.py 行为一致），以及 `scale_coords()` / `update_wait_list()` / `write_user_config()`（ruamel 保留注释）/ `set_screen_resolution()` / `setup_output_directory()`。
+
+### `vision.py` — 截图与图像处理
+
+`cut_by_lines()`、`screenshot()`（PIL `ImageGrab.grab()` → OpenCV 灰度/Otsu 二值化，debug_mode 下保存 original/gray/binary/combinedBinary 到 `log/`）、`cropImage()`、`save_image()`、`debug_visualize_lines()`、`match_list_items()`（列表分割线检测 + 单元格切分）。
+
+### `ocr.py` — OCR 识别与文本匹配
+
+`OCR_is_free` / `OCR_item_name` / `OCR_remain_time` / `OCR_price`、`best_match_item`（rapidfuzz）、`time_to_seconds`（仅支持 `HH:MM:SS` 三段格式，`MM:SS` 解析失败返回 None 为既有行为）。
 
 ### `wegame_switcher.py` — WeGame 窗口管理
 
@@ -218,10 +236,11 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 ## 测试
 
+- **pytest 单元测试**（`tests/`，纯逻辑、不依赖游戏环境）— `tests/test_utils.py`（抖动/编码/YAML 往返/Tesseract 定位）、`tests/test_ocr.py`（best_match_item / time_to_seconds）、`tests/test_daily_fetcher.py`（parse_recipes / match_site_to_config / load_config_departments）。运行：`conda run -n deltaforce python -m pytest tests`（pytest 见 `requirements-dev.txt`）
 - `list_OCR_test(department, categories)` — 验证指定部门物品类别的 OCR 识别效果
 - `test1()` — 枚举所有可见 Windows 窗口
 - `test2()` — 验证配置加载和 user_config 更新
-- `test_ocr_qty*.py` / `test_scan_full.py` — 补货 OCR 数量识别调试脚本（扫描数字区域、投影分析，需 `.img/` 下截图）
+- `test_ocr_qty*.py` / `test_scan_full.py` — 补货 OCR 数量识别调试脚本（扫描数字区域、投影分析，需 `.img/` 下截图，未纳入版本控制）
 - 在 `user_config.yaml` 中启用 `debug_mode: true` 可将截图保存到 `./log/`
 - 设计文档位于 `docs/superpowers/specs/`（PyInstaller 打包方案、补货功能设计）与 `docs/superpowers/plans/`
 

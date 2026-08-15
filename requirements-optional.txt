@@ -1,0 +1,4 @@
+# 可选依赖：每日推荐配方自动抓取（daily_fetcher.py）
+# 未安装时程序正常运行，仅自动跳过配方更新功能。
+# 安装：pip install -r requirements-optional.txt && python -m playwright install chromium
+playwright==1.60.0
