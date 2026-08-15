@@ -10,26 +10,18 @@ click_position 内部会自动缩放，OCR 截图区域在此模块内缩放。
 
 import cv2
 import numpy as np
-import os
 import pyautogui
 import pytesseract
-import sys
 from PIL import ImageGrab
 import keyboard
 from wegame_switcher import click_position
-from utils import jitter_sleep
+from utils import jitter_sleep, resolve_tesseract_path
 
 # ── Tesseract 路径初始化 ──────────────────────────────────
-if getattr(sys, 'frozen', False):
-    _root = os.path.dirname(sys.executable)
-else:
-    _root = os.path.dirname(os.path.abspath(__file__))
 # 优先 dist/Tesseract-OCR（开发环境），fallback Tesseract-OCR（打包后）
-_tess_candidate = os.path.join(_root, 'dist', 'Tesseract-OCR', 'tesseract.exe')
-if not os.path.exists(_tess_candidate):
-    _tess_candidate = os.path.join(_root, 'Tesseract-OCR', 'tesseract.exe')
-if os.path.exists(_tess_candidate):
-    pytesseract.pytesseract.tesseract_cmd = _tess_candidate
+_tess_path = resolve_tesseract_path()
+if _tess_path:
+    pytesseract.pytesseract.tesseract_cmd = _tess_path
 
 
 def _get_scale_factor():

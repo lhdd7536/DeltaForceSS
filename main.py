@@ -4,7 +4,6 @@ import os
 import shutil
 import pytesseract
 import pyautogui
-import yaml
 import re
 import time
 import keyboard
@@ -13,17 +12,21 @@ try:
 except ImportError:
     winsound = None
 import hashlib
-import random
 import win32gui, win32con
 from PIL import ImageGrab
 from datetime import datetime, timedelta
 from rapidfuzz import fuzz
 from datetime import datetime
-from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
-import ctypes
-import sys
-from utils import calc_jitter, read_with_encoding_fallback
+from utils import (
+    project_root,
+    load_yaml,
+    load_ruamel,
+    dump_yaml_rt,
+    click_at,
+    resolve_tesseract_path,
+    calc_jitter,
+)
 
 try:
     from daily_fetcher import maybe_update_recipes
@@ -32,10 +35,7 @@ except ImportError:
     _HAS_FETCHER = False
 
 # ── 项目根目录（兼容 PyInstaller EXE 模式） ──────────────
-if getattr(sys, 'frozen', False):
-    PROJECT_ROOT = os.path.dirname(sys.executable)
-else:
-    PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = project_root()
 
 class IncorrectPageError(Exception):
     def __init__(self, message="未检测到特勤处建造界面"):
@@ -62,19 +62,16 @@ class IncorrectResolution(Exception):
         self.message = message
         super().__init__(self.message)
 
-config = yaml.safe_load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'config.yaml')))
+config = load_yaml(os.path.join(PROJECT_ROOT, 'config.yaml'))
 
-user_config = yaml.safe_load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'user_config.yaml')))
+user_config = load_yaml(os.path.join(PROJECT_ROOT, 'user_config.yaml'))
 
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'log')
 TESSERACT_PATH = user_config['TESSERACT_PATH']
-# 如果配置路径不存在，尝试相对于项目根目录的 dist/Tesseract-OCR
-if not os.path.exists(TESSERACT_PATH):
-    dev_path = os.path.join(
-        PROJECT_ROOT, 'dist', 'Tesseract-OCR', 'tesseract.exe',
-    )
-    if os.path.exists(dev_path):
-        TESSERACT_PATH = dev_path
+# 配置路径失效时自动回退到 dist/Tesseract-OCR 或项目根/Tesseract-OCR
+resolved_tess = resolve_tesseract_path(TESSERACT_PATH)
+if resolved_tess:
+    TESSERACT_PATH = resolved_tess
 
 pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
 scale_factor = 1
@@ -117,7 +114,7 @@ def update_wait_list():
                     return
         raise ValueError(f'Incorrect name: {target_name}')
     
-    user_config = yaml.safe_load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'user_config.yaml')))
+    user_config = load_yaml(os.path.join(PROJECT_ROOT, 'user_config.yaml'))
     
     for dep in ['tech', 'work', 'medical', 'armor']:
         if not user_config[dep]:
@@ -127,14 +124,8 @@ def update_wait_list():
         find_match(dep)
         
 def write_user_config(department):
-    # Configure YAML settings
-    yaml = YAML()
-    yaml.indent(mapping=2, sequence=4, offset=2)
-    yaml.preserve_quotes = True
-    yaml.width = 120
-    
     # Load the existing config with comments
-    user_config = yaml.load(read_with_encoding_fallback(os.path.join(PROJECT_ROOT, 'user_config.yaml')))
+    user_config = load_ruamel(os.path.join(PROJECT_ROOT, 'user_config.yaml'))
 
     if not user_config.get(department):
         return
@@ -162,8 +153,7 @@ def write_user_config(department):
                     item.fa.set_flow_style()
     
     # Write back to file
-    with open(os.path.join(PROJECT_ROOT, 'user_config.yaml'), 'w', encoding='utf-8') as file:
-        yaml.dump(user_config, file)
+    dump_yaml_rt(os.path.join(PROJECT_ROOT, 'user_config.yaml'), user_config)
 
 valid_resolution = {(1920, 1080), (2560, 1440), (3840, 2160)}
 def set_screen_resolution():
@@ -177,10 +167,8 @@ def set_screen_resolution():
 
 # Mouse
 def click_position(position):
-    x = position[0] + random.randint(-3, 3)
-    y = position[1] + random.randint(-3, 3)
-    pyautogui.moveTo(x, y, duration=random.uniform(0.2, 0.5))
-    pyautogui.click()
+    # 坐标已在 scale_coords() 中缩放，直接点击
+    click_at(position[0], position[1])
 
 def scroll_down_x4(position):
     pyautogui.moveTo(position[0], position[1], duration=0.3)

@@ -18,22 +18,15 @@ import win32gui
 import win32process
 import psutil
 
-from ruamel.yaml import YAML
-_yaml_dumper = YAML()
-_yaml_dumper.indent(mapping=2, sequence=4, offset=2)
-_yaml_dumper.preserve_quotes = True
+# 项目根目录（源码/EXE 模式统一由 utils 定位）
+# 先确保 utils 所在目录可导入（直接以脚本方式运行时也成立）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, jitter_sleep
 
-if getattr(sys, 'frozen', False):
-    # PyInstaller EXE 模式：使用 EXE 所在目录
-    PROJECT_ROOT = os.path.dirname(sys.executable)
-else:
-    # 源码模式：使用项目根目录
-    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
+PROJECT_ROOT = project_root()
 
 import pyautogui
 import wegame_switcher
-from utils import jitter_sleep, read_with_encoding_fallback
 import replenishment
 
 
@@ -42,13 +35,12 @@ USER_CONFIG_FILE = os.path.join(PROJECT_ROOT, 'user_config.yaml')
 
 
 def _load_yaml(path):
-    data = _yaml_dumper.load(read_with_encoding_fallback(path))
+    data = load_ruamel(path)
     return data or {}
 
 
 def _dump_yaml(path, data):
-    with open(path, 'w', encoding='utf-8') as f:
-        _yaml_dumper.dump(data, f)
+    dump_yaml_rt(path, data)
 
 
 class AccountPanel(ttk.Frame):
@@ -1044,9 +1036,7 @@ class AccountPanel(ttk.Frame):
             qty = int(self._replenish_qty_var.get())
 
             # 从 config.yaml 加载补货坐标
-            import yaml
-            config = yaml.safe_load(read_with_encoding_fallback(
-                os.path.join(PROJECT_ROOT, 'config.yaml')))
+            config = load_yaml(os.path.join(PROJECT_ROOT, 'config.yaml'))
             replenish_coords = config['replenish_coords']
 
             for account in accounts:

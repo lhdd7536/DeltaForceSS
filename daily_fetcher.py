@@ -9,7 +9,7 @@ import re
 from datetime import date
 from rapidfuzz import fuzz
 import os
-from utils import read_with_encoding_fallback
+from utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, read_with_encoding_fallback
 
 # ============================================================
 # Playwright 按需导入
@@ -26,7 +26,6 @@ except ImportError:
 # ============================================================
 
 ORZICE_URL = "https://orzice.com/v/rb"
-CACHE_FILE = "data/last_update_date.txt"
 
 # 四大台在页面中对应的 HTML 标识关键词
 DEPARTMENT_KEYWORDS = {
@@ -41,8 +40,10 @@ DEPARTMENT_KEYWORDS = {
 # ============================================================
 
 def _get_cache_dir() -> str:
-    os.makedirs("data", exist_ok=True)
-    return "data"
+    # 与 main.py 等模块一致，基于项目根目录定位（避免依赖 CWD）
+    cache_dir = os.path.join(project_root(), "data")
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
 
 
 def should_update_today() -> bool:
@@ -167,9 +168,8 @@ def parse_recipes(html: str) -> dict[str, list[str]]:
 # 物品名匹配 — 与 config.yaml 对齐
 # ============================================================
 
-def load_config_departments(config_path: str = "config.yaml") -> dict[str, set[str]]:
-    import yaml
-    cfg = yaml.safe_load(read_with_encoding_fallback(config_path))
+def load_config_departments(config_path: str | None = None) -> dict[str, set[str]]:
+    cfg = load_yaml(config_path or os.path.join(project_root(), "config.yaml"))
 
     result: dict[str, set[str]] = {}
     for dep, categories in cfg.get("departments", {}).items():
@@ -227,17 +227,10 @@ def match_site_to_config(
 # ============================================================
 
 def update_user_config(recipes: dict[str, str | None]):
-    from ruamel.yaml import YAML
     from ruamel.yaml.comments import CommentedSeq
 
-    user_config_path = "user_config.yaml"
-
-    yaml_loader = YAML()
-    yaml_loader.indent(mapping=2, sequence=4, offset=2)
-    yaml_loader.preserve_quotes = True
-    yaml_loader.width = 120
-
-    user_cfg = yaml_loader.load(read_with_encoding_fallback(user_config_path))
+    user_config_path = os.path.join(project_root(), "user_config.yaml")
+    user_cfg = load_ruamel(user_config_path)
 
     changed = False
     for dep, item_name in recipes.items():
@@ -258,8 +251,7 @@ def update_user_config(recipes: dict[str, str | None]):
         print(f"[daily_fetcher] {dep}: 更新为 \"{item_name}\"")
 
     if changed:
-        with open(user_config_path, "w", encoding="utf-8") as f:
-            yaml_loader.dump(user_cfg, f)
+        dump_yaml_rt(user_config_path, user_cfg)
         print("[daily_fetcher] user_config.yaml 已更新")
     else:
         print("[daily_fetcher] 无变更")

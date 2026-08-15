@@ -18,27 +18,19 @@ from datetime import datetime
 import win32gui
 import win32con
 
-# 项目根目录
-if getattr(sys, 'frozen', False):
-    # PyInstaller EXE 模式：使用 EXE 所在目录
-    PROJECT_ROOT = os.path.dirname(sys.executable)
-else:
-    # 源码模式：使用项目根目录
-    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
+# 项目根目录（源码/EXE 模式统一由 utils 定位）
+# 先确保 utils 所在目录可导入（直接以脚本方式运行时也成立）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, read_with_encoding_fallback
 
-import yaml
-from ruamel.yaml import YAML
-
-from utils import read_with_encoding_fallback
+PROJECT_ROOT = project_root()
 
 
 # ── 工具 ──────────────────────────────────────────────
 
 def _load_yaml(path):
     """加载 YAML 文件（自动回退编码）"""
-    content = read_with_encoding_fallback(path)
-    return yaml.safe_load(content)
+    return load_yaml(path)
 
 
 def _load_user_config():
@@ -290,15 +282,11 @@ class MainWindow(tk.Tk):
         """将 GUI 控件状态写回 user_config.yaml"""
         path = os.path.join(PROJECT_ROOT, 'user_config.yaml')
         try:
-            yaml_loader = YAML()
-            yaml_loader.indent(mapping=2, sequence=4, offset=2)
-            yaml_loader.preserve_quotes = True
-            cfg = yaml_loader.load(read_with_encoding_fallback(path))
+            cfg = load_ruamel(path)
             cfg['background_mode'] = self.bg_var.get()
             cfg['debug_mode'] = self.debug_var.get()
             cfg['auto_update_recipes'] = self.auto_update_var.get()
-            with open(path, 'w', encoding='utf-8') as f:
-                yaml_loader.dump(cfg, f)
+            dump_yaml_rt(path, cfg)
         except Exception as e:
             print(f'[GUI] 保存配置失败: {e}')
 

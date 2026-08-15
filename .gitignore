@@ -1,13 +1,14 @@
 IMG*.png
 log/
-test*.py
+# 遗留 OCR 调试脚本（未纳入版本控制；其余 test*.py 可正常跟踪，供 pytest 使用）
+/test_ocr_qty*.py
+/test_scan_full.py
 build/
 main.spec
 manifest.xml
-build.spec
-build.bat
 user_config copy.yaml
 .vscode
+/.img/
 /Tesseract-OCR
 /dist
 
