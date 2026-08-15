@@ -1,63 +1,38 @@
 @echo off
-chcp 65001 >nul
+rem Delta Force Auto-Craft - packaging script (ASCII only for codepage safety)
+setlocal
 
-echo === Delta Force 自动制造 - 打包脚本 ===
-echo.
+set PYTHON=D:\Anaconda3\envs\deltaforce\python.exe
+if exist "%PYTHON%" goto :env_ok
+echo [ERROR] deltaforce env not found: %PYTHON%
+pause
+exit /b 1
 
-:: 激活 conda 环境
-call D:\Anaconda3\envs\deltaforce\Scripts\activate.bat
-if %errorlevel% neq 0 (
-    echo [错误] 无法激活 conda 环境 deltaforce
-    pause
-    exit /b 1
-)
+:env_ok
+rem clean old output (keep dist/Tesseract-OCR source)
+if exist build rmdir /s /q build
+if exist dist\DeltaForceSS rmdir /s /q dist\DeltaForceSS
 
-:: 清理旧输出目录（保留 dist/Tesseract-OCR 源文件）
-if exist build (
-    echo 清理 build 目录...
-    rmdir /s /q build
-)
-if exist dist\DeltaForceSS (
-    echo 清理旧的打包输出...
-    rmdir /s /q dist\DeltaForceSS
-)
+echo === Packaging with PyInstaller ===
+"%PYTHON%" -m PyInstaller build.spec
+if %errorlevel% neq 0 goto :fail
 
-:: 执行 PyInstaller
-echo 开始打包...
-pyinstaller build.spec
-if %errorlevel% neq 0 (
-    echo [错误] 打包失败
-    pause
-    exit /b 1
-)
-
-:: PyInstaller 5+ 将 datas 放入 _internal/，需复制到 exe 同级
-echo 整理输出文件...
+rem PyInstaller 5+ puts datas into _internal/, move them next to the EXE
 set OUTDIR=dist\DeltaForceSS
-
-:: Tesseract-OCR
-if exist %OUTDIR%\_internal\Tesseract-OCR (
-    move /y %OUTDIR%\_internal\Tesseract-OCR %OUTDIR%\Tesseract-OCR >nul
-)
-
-:: data/
-if exist %OUTDIR%\_internal\data (
-    move /y %OUTDIR%\_internal\data %OUTDIR%\data >nul
-)
-
-:: 配置文件
-if exist %OUTDIR%\_internal\config.yaml (
-    move /y %OUTDIR%\_internal\config.yaml %OUTDIR%\config.yaml >nul
-)
-if exist %OUTDIR%\_internal\user_config.yaml (
-    move /y %OUTDIR%\_internal\user_config.yaml %OUTDIR%\user_config.yaml >nul
-)
+if exist %OUTDIR%\_internal\Tesseract-OCR move /y %OUTDIR%\_internal\Tesseract-OCR %OUTDIR%\Tesseract-OCR >nul
+if exist %OUTDIR%\_internal\data move /y %OUTDIR%\_internal\data %OUTDIR%\data >nul
+if exist %OUTDIR%\_internal\config.yaml move /y %OUTDIR%\_internal\config.yaml %OUTDIR%\config.yaml >nul
+if exist %OUTDIR%\_internal\user_config.yaml move /y %OUTDIR%\_internal\user_config.yaml %OUTDIR%\user_config.yaml >nul
 
 echo.
-echo === 打包完成 ===
-echo 输出路径: %cd%\%OUTDIR%\
-echo.
-echo 文件列表:
+echo === Packaging done ===
+echo Output: %cd%\%OUTDIR%\
 dir /b %OUTDIR%\
 echo.
 pause
+exit /b 0
+
+:fail
+echo [ERROR] PyInstaller failed
+pause
+exit /b 1
