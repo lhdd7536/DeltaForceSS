@@ -73,7 +73,6 @@ armor:                           # Armor Center
 Advanced settings (keep defaults recommended):
 - `auto_run_until_hour` — auto-run cutoff hour (default `11`, i.e. 0:00~11:00 runs without popups); set `23` for all-day auto, `0` to always ask
 - `TESSERACT_PATH` — OCR path (usually no change needed; falls back to `dist/Tesseract-OCR` automatically)
-- `background_mode` — Default `false`; minimizes game after each cycle
 - `debug_mode` — Default `false`; saves screenshots to `./log/`
 - `hotkey` — global hotkey (default `f8`)
 - `auto_replenish` — replenishment config (`enabled` switch, `threshold`, `quantity`)

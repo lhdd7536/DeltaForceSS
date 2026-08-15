@@ -94,16 +94,6 @@ def low_beep():
         winsound.Beep(500, 500)
 
 
-def alt_tab():
-    keyboard.press('alt')
-    time.sleep(0.13)
-    keyboard.press('tab')
-    time.sleep(0.1)
-    keyboard.release('tab')
-    time.sleep(0.02)
-    keyboard.release('alt')
-
-
 def buy_material():
     # purchase page
     x, y = cs.departments_coords['price_point']
@@ -424,7 +414,6 @@ def main(stop_event=None, status_callback=None, single_cycle=False):
     cs._global_stop_event = stop_event
 
     print('###### 程序初始化 ######')
-    background_mode = cs.user_config['background_mode']
     hwnd = win32gui.FindWindow('UnrealWindow', '三角洲行动  ')
 
     while stop_event is None or not stop_event.is_set():
@@ -433,11 +422,6 @@ def main(stop_event=None, status_callback=None, single_cycle=False):
             if _interruptible_sleep(1):
                 print("用户手动停止")
                 return
-            if background_mode:
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                if _interruptible_sleep(3):
-                    print("用户手动停止")
-                    return
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             if _interruptible_sleep(6):
                 print("用户手动停止")
@@ -464,9 +448,6 @@ def main(stop_event=None, status_callback=None, single_cycle=False):
 
             remain_time = min(remain_times) if remain_times else 0
             remain_time += 30     # 30 sec buffer
-
-            if background_mode:
-                alt_tab()
 
             print_restart_info(remain_time)
             low_beep()

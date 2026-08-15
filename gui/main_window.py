@@ -13,6 +13,7 @@ import threading
 import queue
 import sys
 import os
+import time
 from datetime import datetime
 
 import win32gui
@@ -196,9 +197,7 @@ class MainWindow(tk.Tk):
 
         ttk.Separator(ctrl, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=4)
 
-        self.bg_var = tk.BooleanVar(value=False)
         self.debug_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(ctrl, text='后台模式', variable=self.bg_var, command=self._on_bg_toggle).pack(anchor=tk.W)
         ttk.Checkbutton(ctrl, text='调试模式', variable=self.debug_var, command=self._on_debug_toggle).pack(anchor=tk.W)
 
         ttk.Separator(ctrl, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=4)
@@ -248,7 +247,6 @@ class MainWindow(tk.Tk):
         """加载 user_config 到 GUI 控件"""
         try:
             cfg = _load_user_config()
-            self.bg_var.set(cfg.get('background_mode', False))
             self.debug_var.set(cfg.get('debug_mode', False))
         except Exception:
             pass
@@ -258,14 +256,10 @@ class MainWindow(tk.Tk):
         path = os.path.join(PROJECT_ROOT, 'user_config.yaml')
         try:
             cfg = load_ruamel(path)
-            cfg['background_mode'] = self.bg_var.get()
             cfg['debug_mode'] = self.debug_var.get()
             dump_yaml_rt(path, cfg)
         except Exception as e:
             print(f'[GUI] 保存配置失败: {e}')
-
-    def _on_bg_toggle(self):
-        self._save_config()
 
     def _on_debug_toggle(self):
         self._save_config()
@@ -273,27 +267,53 @@ class MainWindow(tk.Tk):
     # ── 快捷键 ────────────────────────────────────────────
 
     def _load_hotkey(self):
-        """从 user_config.yaml 读取快捷键并绑定"""
+        """从 user_config.yaml 读取快捷键并注册为全局热键（游戏前台也可用）"""
         try:
             cfg = _load_user_config()
             hotkey = cfg.get('hotkey', 'f8').strip().lower()
         except Exception:
             hotkey = 'f8'
         self._hotkey_key = hotkey
+        self._global_hotkey = None
+        self._last_toggle_ts = 0.0
 
-        # 解绑旧快捷键
+        # 注册全局热键（keyboard 库，系统级钩子，不依赖窗口焦点）
         try:
-            self.unbind(f'<{self._hotkey_key.upper()}>')
+            import keyboard
+            self._global_hotkey = keyboard.add_hotkey(hotkey, self._on_global_hotkey)
+            self.hotkey_hint.config(text=f'快捷键: {hotkey.upper()} (全局)')
+            print(f'[GUI] 全局快捷键已注册: {hotkey.upper()}')
+        except Exception as e:
+            # 降级：窗口内 bind（仅窗口持有焦点时生效）
+            self.hotkey_hint.config(text=f'快捷键: {hotkey.upper()}')
+            print(f'[GUI] 全局快捷键注册失败，降级为窗口内快捷键: {e}')
+            self.bind(f'<{hotkey.upper()}>', self._toggle_automation)
+
+    def _on_global_hotkey(self):
+        """全局热键回调（keyboard 监听线程）→ 调度到 tkinter 主线程执行"""
+        try:
+            self.after(0, self._toggle_automation)
         except Exception:
             pass
 
-        event_key = f'<{hotkey.upper()}>'
-        self.bind(event_key, self._toggle_automation)
-        self.hotkey_hint.config(text=f'快捷键: {hotkey.upper()}')
-        print(f'[GUI] 快捷键已绑定: {hotkey.upper()}')
+    def _unregister_global_hotkey(self):
+        """注销全局热键（窗口关闭时调用）"""
+        if getattr(self, '_global_hotkey', None):
+            try:
+                import keyboard
+                keyboard.remove_hotkey(self._global_hotkey)
+            except Exception:
+                pass
+            self._global_hotkey = None
 
     def _toggle_automation(self, event=None):
         """快捷键：切换启动/停止"""
+        # 节流：防止全局热键连按/长按导致重复触发
+        now = time.time()
+        if now - self._last_toggle_ts < 1.0:
+            return
+        self._last_toggle_ts = now
+
         if self.worker_thread and self.worker_thread.is_alive():
             print('[GUI] 快捷键: 停止')
             self._stop_automation()
@@ -437,6 +457,9 @@ class MainWindow(tk.Tk):
 
     def _on_close(self):
         """关闭窗口时清理"""
+        # 先注销全局热键，避免关闭过程中误触
+        self._unregister_global_hotkey()
+
         if self.worker_thread and self.worker_thread.is_alive():
             self.stop_event.set()
             self.worker_thread.join(timeout=3)

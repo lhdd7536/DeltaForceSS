@@ -27,7 +27,7 @@ set PYTHONIOENCODING=utf-8
 D:/Anaconda3/envs/deltaforce/python.exe gui/app.py
 ```
 
-GUI 基于 tkinter，包含"单账号"标签页（启动/停止控制、后台/调试模式开关、制造配方、运行日志）和"多账号"标签页（账号列表管理、循环调度、自动补货配置、WeGame 配置）。**默认启动方式，直接运行即可。**
+GUI 基于 tkinter，包含"单账号"标签页（启动/停止控制、调试模式开关、制造配方、运行日志）和"多账号"标签页（账号列表管理、循环调度、自动补货配置、WeGame 配置）。**默认启动方式，直接运行即可。**
 
 ### 后台 CLI 模式（仅调试用）
 
@@ -114,7 +114,7 @@ taskkill //f //pid <进程ID>
 
 ### `core/automator.py` — 单账号制造业务流程
 
-主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、蜂鸣与 `alt_tab`。状态经 `from core import config_store as cs` 实时访问。
+主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、蜂鸣。状态经 `from core import config_store as cs` 实时访问。
 
 ### `core/config_store.py` — 配置与全局状态
 
@@ -164,9 +164,9 @@ taskkill //f //pid <进程ID>
 
 `MainWindow` 类（tk.Tk），应用主入口：
 
-- **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、后台模式/调试模式勾选（写回 `user_config.yaml`）、快捷键提示、制造配方面板（静态显示 `user_config.yaml` 四部门队列）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
+- **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、调试模式勾选（写回 `user_config.yaml`）、快捷键提示、制造配方面板（静态显示 `user_config.yaml` 四部门队列）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
 - **多账号标签页** — AccountPanel 实例
-- **快捷键** — 从 `user_config.yaml` 的 `hotkey` 字段读取（默认 `f8`），绑定切换启动/停止（单账号运行中→停止；多账号运行中→停止调度；否则启动单账号）
+- **快捷键** — 从 `user_config.yaml` 的 `hotkey` 字段读取（默认 `f8`），通过 `keyboard.add_hotkey` 注册为系统级全局热键（游戏前台也可用，带 1s 节流防连按，注册失败降级为窗口内 bind），切换逻辑：单账号运行中→停止；多账号运行中→停止调度；否则启动单账号
 
 ### `gui/account_panel.py` — 多账号管理面板
 
@@ -181,7 +181,7 @@ taskkill //f //pid <进程ID>
 ## 配置文件
 
 - `config.yaml` — 物品数据库 (`departments`，按部门/类别分级，S10 赛季物品)、屏幕坐标 (`departments_coords`：dash_page 各部门 free/timmer 区域、列表 list_point/list_size/item_size、交易行 price/buy、build_position、tech_dep_region)、各部门 OCR 配置 (`OCR_configs`) 与匹配阈值 (`OCR_factors`：tech 71 / work 96.5 / medical 80 / armor 80)、补货坐标 (`replenish_coords` 含各材料 click/quantity_region)
-- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`，`[物品名, 数量]`，-1 为无限)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径 (`TESSERACT_PATH`)、快捷键 (`hotkey`)、调试/后台模式开关 (`debug_mode` / `background_mode`)、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
+- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`，`[物品名, 数量]`，-1 为无限)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径 (`TESSERACT_PATH`)、快捷键 (`hotkey`)、调试模式开关 (`debug_mode`)、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
 - `data/accounts.yaml` — 多账号配置：
   - `accounts` — 账号列表（名称、点击坐标 `click_pos`、是否启用、预计完成时间 `estimated_end`、滚动次数 `scroll_before_click`）
   - `wegame` — WeGame 操作坐标（`switch_account_btn_pos`、`login_btn_pos`、`game_app_pos`、`launch_btn_pos`、`mode_btn_pos`、`dash_entry_pos`）和各步骤等待时长（`wait_before_app`、`wait_game_launch`、`wait_before_space`）、`exit_method`、`loop_interval`、`wegame_path`

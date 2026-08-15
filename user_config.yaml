@@ -18,7 +18,6 @@ armor:
 auto_run_until_hour: 11
 TESSERACT_PATH: Tesseract-OCR\tesseract.exe
 hotkey: f8
-background_mode: false
 debug_mode: false
 auto_replenish:
   enabled: true

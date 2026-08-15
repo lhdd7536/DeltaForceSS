@@ -77,7 +77,6 @@ armor:
 高级设置建议保持默认：
 - `auto_run_until_hour` — 自动执行截止小时（默认 `11`，即 0:00~11:00 自动运行不弹窗），改为 `23` 全天自动，改为 `0` 每次弹窗确认
 - `TESSERACT_PATH` — OCR 路径（一般无需修改，失效时自动回退到 `dist/Tesseract-OCR`）
-- `background_mode` — 默认 `false`，开启后每轮结束最小化游戏
 - `debug_mode` — 默认 `false`，开启后将截图保存到 `./log/`
 - `hotkey` — 全局快捷键（默认 `f8`）
 - `auto_replenish` — 自动补货配置（`enabled` 开关、`threshold` 触发阈值、`quantity` 补货量）
