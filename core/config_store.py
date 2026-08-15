@@ -11,7 +11,7 @@ import shutil
 import pytesseract
 from ruamel.yaml.comments import CommentedSeq
 
-from utils import (
+from core.utils import (
     project_root,
     load_yaml,
     load_ruamel,

@@ -20,10 +20,10 @@ except ImportError:
     winsound = None
 import pytesseract
 
-import config_store as cs
-from utils import calc_jitter, click_at
-from vision import screenshot, save_image, cropImage, match_list_items
-from ocr import (
+from core import config_store as cs
+from core.utils import calc_jitter, click_at
+from core.vision import screenshot, save_image, cropImage, match_list_items
+from core.ocr import (
     OCR_remain_time,
     OCR_is_free,
     OCR_item_name,

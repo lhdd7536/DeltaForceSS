@@ -9,7 +9,7 @@ import re
 import pytesseract
 from rapidfuzz import fuzz
 
-import config_store as cs
+from core import config_store as cs
 
 
 def time_to_seconds(time_str):

@@ -14,8 +14,8 @@ import pyautogui
 import pytesseract
 from PIL import ImageGrab
 import keyboard
-from wegame_switcher import click_position
-from utils import jitter_sleep, resolve_tesseract_path
+from core.wegame_switcher import click_position
+from core.utils import jitter_sleep, resolve_tesseract_path
 
 # ── Tesseract 路径初始化 ──────────────────────────────────
 # 优先 dist/Tesseract-OCR（开发环境），fallback Tesseract-OCR（打包后）

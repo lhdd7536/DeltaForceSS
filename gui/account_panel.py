@@ -21,13 +21,13 @@ import psutil
 # 项目根目录（源码/EXE 模式统一由 utils 定位）
 # 先确保 utils 所在目录可导入（直接以脚本方式运行时也成立）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, jitter_sleep
+from core.utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, jitter_sleep
 
 PROJECT_ROOT = project_root()
 
 import pyautogui
-import wegame_switcher
-import replenishment
+from core import wegame_switcher
+from core import replenishment
 
 
 ACCOUNTS_FILE = os.path.join(PROJECT_ROOT, 'data', 'accounts.yaml')

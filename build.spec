@@ -39,7 +39,7 @@ a = Analysis(
         'keyboard',
     ],
     hookspath=[],
-    runtime_hooks=[os.path.join(PROJECT_ROOT, 'runtime_hook.py')],
+    runtime_hooks=[os.path.join(PROJECT_ROOT, 'packaging', 'runtime_hook.py')],
     excludes=[
         'tkinter.test',
         'PIL.ImageShow',

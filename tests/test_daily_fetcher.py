@@ -1,5 +1,5 @@
 """daily_fetcher 解析/匹配纯函数测试（不访问网络）"""
-from daily_fetcher import parse_recipes, match_site_to_config, load_config_departments
+from core.daily_fetcher import parse_recipes, match_site_to_config, load_config_departments
 
 SAMPLE_HTML = """
 <html><body>

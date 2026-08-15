@@ -9,10 +9,10 @@ from ruamel.yaml import YAML as _RuamelYAML
 
 
 def project_root():
-    """项目根目录：源码模式为仓库根目录，EXE 模式为 EXE 所在目录"""
+    """项目根目录：源码模式为仓库根目录（core 包的父目录），EXE 模式为 EXE 所在目录"""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def calc_jitter(seconds):

@@ -4,7 +4,7 @@ import random
 import sys
 import types
 
-import utils
+from core import utils
 
 
 def test_calc_jitter_range():

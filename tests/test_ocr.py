@@ -1,5 +1,5 @@
 """ocr 模块纯函数测试（无需真实截图/OCR）"""
-from ocr import best_match_item, time_to_seconds
+from core.ocr import best_match_item, time_to_seconds
 
 
 def test_best_match_exact():

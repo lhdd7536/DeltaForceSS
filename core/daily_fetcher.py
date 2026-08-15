@@ -9,7 +9,7 @@ import re
 from datetime import date
 from rapidfuzz import fuzz
 import os
-from utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, read_with_encoding_fallback
+from core.utils import project_root, load_yaml, load_ruamel, dump_yaml_rt, read_with_encoding_fallback
 
 # ============================================================
 # Playwright 按需导入

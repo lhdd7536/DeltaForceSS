@@ -1,8 +1,8 @@
 IMG*.png
 log/
-# 遗留 OCR 调试脚本（未纳入版本控制；其余 test*.py 可正常跟踪，供 pytest 使用）
-/test_ocr_qty*.py
-/test_scan_full.py
+# 遗留 OCR 调试脚本（未纳入版本控制；tests/ 下 pytest 文件可正常跟踪）
+/scripts/test_ocr_qty*.py
+/scripts/test_scan_full.py
 build/
 main.spec
 manifest.xml

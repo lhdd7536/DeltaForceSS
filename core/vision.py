@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from PIL import ImageGrab
 
-import config_store as cs
+from core import config_store as cs
 
 
 # Image

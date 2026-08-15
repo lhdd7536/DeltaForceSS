@@ -46,9 +46,9 @@ build.bat
 
 `build.bat` 会自动：激活 conda 环境 → 清理旧输出 → `pyinstaller build.spec` → 将 `_internal/` 中的 `config.yaml`、`user_config.yaml`、`data`、`Tesseract-OCR` 移动到 EXE 同级。
 
-> **注意**：EXE 模式下所有模块通过 `utils.project_root()`（基于 `sys.executable`）统一定位资源文件（`config.yaml`、`user_config.yaml`、`data/accounts.yaml` 等），因此启动时 CWD 无关紧要。打包前修改了源码后必须重新打包才会生效。
+> **注意**：EXE 模式下所有模块通过 `core.utils.project_root()`（基于 `sys.executable`）统一定位资源文件（`config.yaml`、`user_config.yaml`、`data/accounts.yaml` 等），因此启动时 CWD 无关紧要。打包前修改了源码后必须重新打包才会生效。
 >
-> 打包相关文件：`build.spec`（PyInstaller 配置，`runtime_hooks` 指向 `runtime_hook.py` 修复 Tcl/Tk 路径，datas 打包 `_tcl_data`/`_tk_data`）、`runtime_hook.py`（运行时设置 `TCL_LIBRARY`/`TK_LIBRARY` 环境变量）。GUI 隐藏控制台后 stdout 重定向到 `log/app.log`（见 `gui/app.py`）。
+> 打包相关文件：`build.spec`（PyInstaller 配置，`runtime_hooks` 指向 `packaging/runtime_hook.py` 修复 Tcl/Tk 路径，datas 打包 `_tcl_data`/`_tk_data`）、`packaging/runtime_hook.py`（运行时设置 `TCL_LIBRARY`/`TK_LIBRARY` 环境变量）。GUI 隐藏控制台后 stdout 重定向到 `log/app.log`（见 `gui/app.py`）。
 
 ### 关闭程序
 
@@ -67,9 +67,9 @@ taskkill //f //pid <进程ID>
 
 ## 架构说明
 
-### 单账号模式（`automator.py` 业务流程 + `main.py` 薄壳入口）
+### 单账号模式（`core/automator.py` 业务流程 + `main.py` 薄壳入口）
 
-代码已按职责拆分（原 894 行 `main.py` → 5 个模块）：`config_store`（配置与全局状态）、`vision`（截图/图像）、`ocr`（识别/匹配）、`automator`（业务流程）、`main.py`（薄壳：主循环入口 + 调试函数）。
+代码已按职责拆分并收敛为 `core/` 包：`core/utils`（共享工具）、`core/config_store`（配置与全局状态）、`core/vision`（截图/图像）、`core/ocr`（识别/匹配）、`core/automator`（业务流程）、`core/wegame_switcher`（WeGame 窗口管理）、`core/replenishment`（补货）、`core/daily_fetcher`（每日配方）。`main.py` 为薄壳（主循环入口 + 调试函数），`gui/` 为界面，`tests/` 为 pytest 测试，`scripts/` 为调试脚本，`packaging/` 为打包钩子。
 
 核心流程如下：
 
@@ -120,23 +120,23 @@ taskkill //f //pid <进程ID>
 
 仅保留：主循环入口 `main()`（GUI / 多账号模块通过 `import main as auto_module; auto_module.main(...)` 调用）、调试测试函数（`list_OCR_test` / `test1` / `test2`）与命令行入口。业务逻辑已拆至以下模块：
 
-### `automator.py` — 单账号制造业务流程
+### `core/automator.py` — 单账号制造业务流程
 
-主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、蜂鸣与 `alt_tab`。状态经 `import config_store as cs` 实时访问。
+主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、蜂鸣与 `alt_tab`。状态经 `from core import config_store as cs` 实时访问。
 
-### `config_store.py` — 配置与全局状态
+### `core/config_store.py` — 配置与全局状态
 
 集中管理 `config` / `user_config` / `OUTPUT_DIR` / `TESSERACT_PATH` / `scale_factor` / `departments_coords` / `debug_mode` / `wait_list` / `_global_stop_event` 的加载与读写（import 时加载，与原 main.py 行为一致），以及 `scale_coords()` / `update_wait_list()` / `write_user_config()`（ruamel 保留注释）/ `set_screen_resolution()` / `setup_output_directory()`。
 
-### `vision.py` — 截图与图像处理
+### `core/vision.py` — 截图与图像处理
 
 `cut_by_lines()`、`screenshot()`（PIL `ImageGrab.grab()` → OpenCV 灰度/Otsu 二值化，debug_mode 下保存 original/gray/binary/combinedBinary 到 `log/`）、`cropImage()`、`save_image()`、`debug_visualize_lines()`、`match_list_items()`（列表分割线检测 + 单元格切分）。
 
-### `ocr.py` — OCR 识别与文本匹配
+### `core/ocr.py` — OCR 识别与文本匹配
 
 `OCR_is_free` / `OCR_item_name` / `OCR_remain_time` / `OCR_price`、`best_match_item`（rapidfuzz）、`time_to_seconds`（仅支持 `HH:MM:SS` 三段格式，`MM:SS` 解析失败返回 None 为既有行为）。
 
-### `wegame_switcher.py` — WeGame 窗口管理
+### `core/wegame_switcher.py` — WeGame 窗口管理
 
 窗口操作工具模块，负责：
 
@@ -149,15 +149,15 @@ taskkill //f //pid <进程ID>
 - **游戏退出** (`exit_game`) — 支持 alt_f4 / wm_close / taskkill 三种退出方式；`wait_game_exit()` 轮询等待窗口关闭，超时强制结束
 - **进程管理** — `exit_wegame()` 强杀 WeGame 进程（`_hide_cmd` 用 `subprocess.CREATE_NO_WINDOW` 隐藏命令行窗口）
 
-### `replenishment.py` — 制造材料补货模块
+### `core/replenishment.py` — 制造材料补货模块
 
 自动导航到军需处 → 收集品界面，OCR 识别钛合金/高级燃料库存数量（`OCR_quantity`，`--psm 7` 数字白名单），低于阈值时点击增加数量/一键补齐/购买完成补货。坐标从 `config.yaml` 的 `replenish_coords` 加载，每个材料独立的 `quantity_region`（`click_position` 内部缩放，region 在本模块内缩放）。
 
-### `daily_fetcher.py` — 每日推荐配方抓取
+### `core/daily_fetcher.py` — 每日推荐配方抓取
 
 见上文"每日推荐配方"小节。入口：`maybe_update_recipes()`（自动）/ `force_update_recipes()`（手动）。
 
-### `utils.py` — 共享工具（全项目统一复用）
+### `core/utils.py` — 共享工具（全项目统一复用）
 
 - `project_root()` — 项目根目录（源码模式为仓库根，EXE 模式为 EXE 所在目录），所有模块统一通过它定位资源
 - `calc_jitter(seconds)` — ±20% 随机波动时长（最大抖动 30s）

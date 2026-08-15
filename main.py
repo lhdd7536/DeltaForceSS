@@ -17,10 +17,10 @@ import pyautogui
 import win32gui
 import win32con
 
-import config_store as cs
-from automator import main, high_beep, low_beep, scroll_down_x4, IncorrectPageError  # noqa: F401
-from vision import match_list_items
-from ocr import OCR_item_name, best_match_item
+from core import config_store as cs
+from core.automator import main, high_beep, low_beep, scroll_down_x4, IncorrectPageError  # noqa: F401
+from core.vision import match_list_items
+from core.ocr import OCR_item_name, best_match_item
 
 
 def list_OCR_test(department, categories):

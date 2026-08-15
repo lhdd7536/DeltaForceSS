@@ -16,7 +16,7 @@ import win32gui
 import win32process
 import win32con
 import keyboard
-from utils import jitter_sleep, click_at
+from core.utils import jitter_sleep, click_at
 
 # user32 API：SwitchToThisWindow 不受前台窗口权限限制
 _user32 = ctypes.windll.user32
