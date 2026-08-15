@@ -164,7 +164,7 @@ taskkill //f //pid <进程ID>
 
 `MainWindow` 类（tk.Tk），应用主入口：
 
-- **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、调试模式勾选（写回 `user_config.yaml`）、快捷键提示、制造配方面板（静态显示 `user_config.yaml` 四部门队列）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
+- **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、调试模式勾选（写回 `user_config.yaml`）、快捷键提示、制造配方面板（四部门一行并列，只读 Combobox 下拉选择制造物品，选项直接来自 `config.yaml` 的 `departments`（该部门全部物品），保存按钮 `_save_recipes()` 写回 `user_config.yaml` 保留原数量，未选择部门保持原状）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
 - **多账号标签页** — AccountPanel 实例
 - **快捷键** — 从 `user_config.yaml` 的 `hotkey` 字段读取（默认 `f8`），通过 `keyboard.add_hotkey` 注册为系统级全局热键（游戏前台也可用，带 1s 节流防连按，注册失败降级为窗口内 bind），切换逻辑：单账号运行中→停止；多账号运行中→停止调度；否则启动单账号
 

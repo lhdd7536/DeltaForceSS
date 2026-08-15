@@ -284,51 +284,43 @@ class AccountPanel(ttk.Frame):
         wg_inner.columnconfigure(0, weight=1)
         wg_inner.columnconfigure(1, weight=1)
 
-        # ── 登录阶段（步骤 1-3） ──
+        # ── WeGame 路径（顶部整行，显眼） ──
+        path_row = ttk.Frame(wg_inner)
+        path_row.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 2))
+        ttk.Label(path_row, text='WeGame 路径:', width=14).pack(side=tk.LEFT)
+        self.wegame_path_var = tk.StringVar(value=self.wegame_cfg.get('wegame_path', ''))
+        ttk.Entry(path_row, width=56, textvariable=self.wegame_path_var).pack(side=tk.LEFT, padx=1)
+        ttk.Label(path_row, text='(留空自动检测)', foreground='gray').pack(side=tk.LEFT, padx=(6, 0))
+
+        # ── 登录阶段（步骤 1-3），左侧 ──
         phase1 = ttk.LabelFrame(wg_inner, text='登录阶段（步骤 1-3）', padding=4)
-        phase1.grid(row=0, column=0, sticky='nsew', padx=2, pady=2)
+        phase1.grid(row=1, column=0, sticky='nsew', padx=2, pady=2)
         _add_coord_row(phase1, '1', '账号管理', 'switch_account_btn_pos', [60, 60])
         ttk.Label(phase1, text='步骤2 点击账号:  从上方账号列表中选择').pack(anchor=tk.W, pady=1)
         _add_coord_row(phase1, '3', '登录按钮', 'login_btn_pos', [960, 640])
 
-        # ── 启动阶段（步骤 4-5） ──
+        # ── 启动阶段（步骤 4-5），左侧（登录下方） ──
         phase2 = ttk.LabelFrame(wg_inner, text='启动阶段（步骤 4-5）', padding=4)
-        phase2.grid(row=0, column=1, sticky='nsew', padx=2, pady=2)
+        phase2.grid(row=2, column=0, sticky='nsew', padx=2, pady=2)
         _add_coord_row(phase2, '4', '三角洲应用', 'game_app_pos', [150, 400])
         _add_wait_row(phase2, '     等待:', 'wait_before_app', 6)
         _add_coord_row(phase2, '5', '启动按钮', 'launch_btn_pos', [960, 800])
 
-        # ── 导航阶段（步骤 6-9） ──
+        # ── 导航阶段（步骤 6-9），右侧 ──
         phase3 = ttk.LabelFrame(wg_inner, text='导航阶段（步骤 6-9）', padding=4)
-        phase3.grid(row=1, column=0, sticky='nsew', padx=2, pady=2)
+        phase3.grid(row=1, column=1, rowspan=2, sticky='nsew', padx=2, pady=2)
         _add_coord_row(phase3, '6', '烽火地带', 'mode_btn_pos', [300, 500])
         _add_wait_row(phase3, '     游戏加载等待:', 'wait_game_launch', 80)
         ttk.Label(phase3, text='步骤7 按空格:  (自动执行，跳过开场动画)').pack(anchor=tk.W, pady=1)
         _add_wait_row(phase3, '     跳动画前等待:', 'wait_before_space', 10)
         ttk.Label(phase3, text='步骤8 按 Tab:  (自动执行)').pack(anchor=tk.W, pady=1)
         _add_coord_row(phase3, '9', '特勤处入口', 'dash_entry_pos', [600, 350])
-
-        # ── 退出阶段（步骤 11） ──
-        phase4 = ttk.LabelFrame(wg_inner, text='退出阶段（步骤 11）', padding=4)
-        phase4.grid(row=1, column=1, sticky='nsew', padx=2, pady=2)
-        exit_row = ttk.Frame(phase4)
-        exit_row.pack(fill=tk.X, pady=1)
-        ttk.Label(exit_row, text='退出方式:', width=14).pack(side=tk.LEFT)
-        self.exit_method_var = tk.StringVar(value=self.wegame_cfg.get('exit_method', 'taskkill'))
-        exit_combo = ttk.Combobox(exit_row, textvariable=self.exit_method_var,
-                                  values=['alt_f4', 'wm_close', 'taskkill'], width=10, state='readonly')
-        exit_combo.pack(side=tk.LEFT, padx=2)
-
-        # WeGame 路径
-        path_row = ttk.Frame(wg_inner)
-        ttk.Label(path_row, text='WeGame 路径:', width=14).pack(side=tk.LEFT)
-        self.wegame_path_var = tk.StringVar(value=self.wegame_cfg.get('wegame_path', ''))
-        ttk.Entry(path_row, width=50, textvariable=self.wegame_path_var).pack(side=tk.LEFT, padx=1)
-        path_row.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(4, 0))
+        ttk.Label(phase3, text='步骤10 自动制造:  (自动执行一轮制造检测)').pack(anchor=tk.W, pady=1)
+        ttk.Label(phase3, text='步骤11 自动退出:  (taskkill 强制结束)').pack(anchor=tk.W, pady=1)
 
         # 保存按钮
         save_row = ttk.Frame(wg_inner)
-        save_row.grid(row=4, column=0, columnspan=2, sticky='e', pady=(4, 0))
+        save_row.grid(row=3, column=0, columnspan=2, sticky='e', pady=(4, 0))
         ttk.Button(save_row, text='保存配置', command=self._save_wg_config).pack(side=tk.RIGHT)
 
         # 初始化列表
@@ -467,7 +459,7 @@ class AccountPanel(ttk.Frame):
                     pass
 
             self.wegame_cfg['loop_interval'] = int(self.loop_interval_var.get())
-            self.wegame_cfg['exit_method'] = self.exit_method_var.get()
+            # exit_method 不在 GUI 显示（无退出阶段），保留 yaml 原值，可手动编辑 accounts.yaml
             self.wegame_cfg['wegame_path'] = self.wegame_path_var.get()
             self._save_accounts()
             print('[多账号] WeGame 配置已保存')

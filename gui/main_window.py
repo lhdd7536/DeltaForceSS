@@ -8,7 +8,7 @@ Delta Force 自动制造 - GUI 主窗口
 """
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import threading
 import queue
 import sys
@@ -171,11 +171,11 @@ class MainWindow(tk.Tk):
         parent.grid_rowconfigure(1, weight=1)  # 日志: 占满剩余
         parent.grid_columnconfigure(0, weight=1)
 
-        # ── 顶部区域（控制面板 + 推荐配方，紧凑排列） ──
+        # ── 顶部区域（控制面板 + 制造配方） ──
         top = ttk.Frame(parent, padding=self.PADDING)
         top.grid(row=0, column=0, sticky='ew')
         top.grid_columnconfigure(0, weight=0)  # 控制面板不扩展
-        top.grid_columnconfigure(1, weight=0)  # 推荐配方不扩展（紧凑）
+        top.grid_columnconfigure(1, weight=1)  # 制造配方占满剩余空间
 
         # 控制面板
         ctrl = ttk.LabelFrame(top, text='控制面板', padding=self.PADDING)
@@ -204,25 +204,39 @@ class MainWindow(tk.Tk):
         self.hotkey_hint = ttk.Label(ctrl, text='快捷键: F8', foreground='gray')
         self.hotkey_hint.pack(anchor=tk.W)
 
-        # 制造配方（紧凑，不扩展；静态显示 user_config 中的制造队列）
+        # 制造配方（一行显示：四个部门并列；只读下拉框从 config.yaml 全部制造物品中选择）
         recipe = ttk.LabelFrame(top, text='制造配方', padding=self.PADDING)
         recipe.grid(row=0, column=1, sticky='nsew')
 
         recipe_grid = ttk.Frame(recipe)
         recipe_grid.pack(fill=tk.BOTH, expand=True)
-        recipe_grid.columnconfigure((0, 1), weight=1)
-        recipe_grid.rowconfigure((0, 1), weight=1)
+        recipe_grid.columnconfigure((0, 1, 2, 3), weight=1)
+        recipe_grid.rowconfigure(0, weight=1)
 
-        self.recipe_labels = {}
-        for dep, (r, c) in zip(
-            ('tech', 'work', 'medical', 'armor'),
-            [(0, 0), (0, 1), (1, 0), (1, 1)]
-        ):
+        # 从 config.yaml 加载各部门合法物品（下拉选项，去重保持顺序）
+        recipe_items = {}
+        try:
+            _cfg = _load_yaml(os.path.join(PROJECT_ROOT, 'config.yaml'))
+            for dep in ('tech', 'work', 'medical', 'armor'):
+                items = []
+                for cat_items in _cfg['departments'][dep].values():
+                    items.extend(cat_items)
+                seen = set()
+                recipe_items[dep] = [x for x in items if not (x in seen or seen.add(x))]
+        except Exception as e:
+            print(f'[GUI] 加载制造物品列表失败: {e}')
+
+        self.recipe_combos = {}
+        for i, dep in enumerate(('tech', 'work', 'medical', 'armor')):
             frame = ttk.LabelFrame(recipe_grid, text=self.DEP_NAMES[dep])
-            frame.grid(row=r, column=c, sticky='nsew', padx=2, pady=2)
-            label = ttk.Label(frame, text='--', anchor=tk.CENTER, font=('', 10, 'bold'))
-            label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-            self.recipe_labels[dep] = label
+            frame.grid(row=0, column=i, sticky='nsew', padx=2, pady=2)
+            combo = ttk.Combobox(frame, values=recipe_items.get(dep, []),
+                                 state='readonly', height=12)
+            combo.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+            self.recipe_combos[dep] = combo
+
+        # 保存配方（下拉框选项均来自 config.yaml，无需额外校验）
+        ttk.Button(recipe, text='保存配方', command=self._save_recipes).pack(fill=tk.X, pady=(4, 0))
 
         # ── 运行日志 ──
         log_frame, log_text = self._build_log_section(parent)
@@ -335,10 +349,35 @@ class MainWindow(tk.Tk):
                 if items and len(items) > 0:
                     name = items[0][0]
                 else:
-                    name = '(空)'
-                self.recipe_labels[dep].config(text=name)
+                    name = ''
+                self.recipe_combos[dep].set(name)
         except Exception as e:
             print(f'[GUI] 加载制造配方失败: {e}')
+
+    def _save_recipes(self):
+        """保存制造配方：将四个部门下拉框选定的物品写回 user_config.yaml
+
+        下拉框选项直接来自 config.yaml 的 departments，均为该制造台合法物品，
+        无需额外校验；未选择的部门保持原状（不制造）。
+        """
+        try:
+            path = os.path.join(PROJECT_ROOT, 'user_config.yaml')
+            ucfg = load_ruamel(path)
+            for dep in ('tech', 'work', 'medical', 'armor'):
+                name = self.recipe_combos[dep].get().strip()
+                if not name:
+                    # 未选择 → 保持该部门原状
+                    continue
+                current = ucfg.get(dep)
+                if current and len(current) > 0:
+                    current[0][0] = name
+                else:
+                    ucfg[dep] = [[name, -1]]
+            dump_yaml_rt(path, ucfg)
+            messagebox.showinfo('保存成功', '制造配方已更新')
+            self._refresh_recipe_display()
+        except Exception as e:
+            messagebox.showerror('保存失败', f'发生错误: {e}')
 
     # ── 线程控制 ────────────────────────────────────────
 
