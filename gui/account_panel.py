@@ -309,7 +309,7 @@ class AccountPanel(ttk.Frame):
         # ── 导航阶段（步骤 6-9），右侧 ──
         phase3 = ttk.LabelFrame(wg_inner, text='导航阶段（步骤 6-9）', padding=4)
         phase3.grid(row=1, column=1, rowspan=2, sticky='nsew', padx=2, pady=2)
-        _add_coord_row(phase3, '6', '烽火地带', 'mode_btn_pos', [300, 500])
+        _add_coord_row(phase3, '6', '烽火地带', 'mode_btn_pos', [530, 814])
         _add_wait_row(phase3, '     游戏加载等待:', 'wait_game_launch', 80)
         ttk.Label(phase3, text='步骤7 按空格:  (自动执行，跳过开场动画)').pack(anchor=tk.W, pady=1)
         _add_wait_row(phase3, '     跳动画前等待:', 'wait_before_space', 10)
@@ -774,7 +774,7 @@ class AccountPanel(ttk.Frame):
 
         wegame_switcher.bring_to_foreground(hwnd)
         jitter_sleep(1)
-        mode_pos = wg_cfg.get('mode_btn_pos', [300, 500])
+        mode_pos = wg_cfg.get('mode_btn_pos', [530, 814])
         wegame_switcher.click_game_mode(mode_pos)
         jitter_sleep(1)
         wegame_switcher.click_game_mode(mode_pos)
