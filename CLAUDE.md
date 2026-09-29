@@ -243,4 +243,4 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 | v3.6 | `22c7aa0` | 新增每日自动补货功能：看门狗定时2点触发、独立补货循环、GUI配置阈值/补货量/手动补货按钮；钛合金和高级燃料使用独立quantity_region坐标 |
 | v3.7 | `753a69e` | 补货完成后自动整理仓库（步骤18-21 ESC→仓库→整理→确认）；推荐配方自动更新勾选（auto_update_recipes，默认开启可取消） |
 | v3.8 | `1ce519e` | 移除后台模式（删除 background_mode 分支与 alt_tab）；F8 改为系统级全局热键（keyboard.add_hotkey，游戏前台可用）；GUI 制造配方可修改（四部门一行并列只读下拉框，选项来自 config.yaml，保存写回 user_config.yaml）；多账号 WeGame 配置重排（路径置顶、左侧登录+启动、右侧导航、移除退出阶段） |
-| v3.9 | (未提交) | 多账号账号编辑对话框新增"完成时间"编辑（`estimated_end`，HH:MM，留空=未设置，"当前时间"/"清空"按钮，`parse_end_time()` 校验归一化），无需手改 `data/accounts.yaml`；GUI 修改账号后预约监控立即重算下次执行时间（`_schedule_dirty`） |
+| v3.9 | `b6188e1` | 多账号账号编辑对话框新增"完成时间"编辑（`estimated_end`，HH:MM，留空=未设置，"当前时间"/"清空"按钮，`parse_end_time()` 校验归一化），无需手改 `data/accounts.yaml`；GUI 修改账号后预约监控立即重算下次执行时间（`_schedule_dirty`） |
