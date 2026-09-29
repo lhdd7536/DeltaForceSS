@@ -4,6 +4,7 @@
 管理账号列表、WeGame 配置，按顺序调度多账号自动制造。
 """
 
+import re
 import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
@@ -43,6 +44,23 @@ def _dump_yaml(path, data):
     dump_yaml_rt(path, data)
 
 
+def parse_end_time(raw):
+    """解析完成时间文本。
+
+    返回 (归一化后的 'HH:MM' 或 '', 错误信息或 None)；空值（含 '—'）表示未设置。
+    """
+    text = (raw or '').strip().replace('：', ':')
+    if text in ('', '—', '-', '--'):
+        return '', None
+    m = re.fullmatch(r'(\d{1,2}):(\d{1,2})', text)
+    if not m:
+        return None, '完成时间格式应为 HH:MM（如 08:30），留空表示未设置'
+    hh, mm = int(m.group(1)), int(m.group(2))
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return None, '完成时间超出范围（00:00 - 23:59）'
+    return f'{hh:02d}:{mm:02d}', None
+
+
 class AccountPanel(ttk.Frame):
     """多账号管理面板"""
 
@@ -58,6 +76,8 @@ class AccountPanel(ttk.Frame):
         self._cycle_has_failure = False
         self._retry_count = 0
         self._max_retries = 3
+        # 账号/完成时间被 GUI 修改后置位，预约监控据此重算下次执行时间
+        self._schedule_dirty = False
 
         self.accounts = []
         self._load_accounts()
@@ -87,6 +107,8 @@ class AccountPanel(ttk.Frame):
         }
         os.makedirs(os.path.dirname(ACCOUNTS_FILE), exist_ok=True)
         _dump_yaml(ACCOUNTS_FILE, data)
+        # 通知预约监控重新计算下次执行时间（完成时间可能已改变）
+        self._schedule_dirty = True
 
     def _load_auto_hour(self):
         """从 user_config.yaml 加载自动执行截止小时"""
@@ -334,12 +356,13 @@ class AccountPanel(ttk.Frame):
         """添加账号"""
         dialog = _AccountDialog(self, title='添加账号')
         if dialog.result:
-            name, click_pos, scroll = dialog.result
+            name, click_pos, scroll, estimated_end = dialog.result
             self.accounts.append({
                 'name': name,
                 'click_pos': click_pos,
                 'scroll_before_click': scroll,
                 'enabled': True,
+                'estimated_end': estimated_end,
             })
             self._save_accounts()
             self._refresh_list()
@@ -356,12 +379,14 @@ class AccountPanel(ttk.Frame):
         dialog = _AccountDialog(self, title='编辑账号',
                                 name=acc['name'],
                                 click_pos=acc.get('click_pos', [0, 0]),
-                                scroll_before_click=acc.get('scroll_before_click', 0))
+                                scroll_before_click=acc.get('scroll_before_click', 0),
+                                estimated_end=acc.get('estimated_end', ''))
         if dialog.result:
-            name, click_pos, scroll = dialog.result
+            name, click_pos, scroll, estimated_end = dialog.result
             self.accounts[idx]['name'] = name
             self.accounts[idx]['click_pos'] = click_pos
             self.accounts[idx]['scroll_before_click'] = scroll
+            self.accounts[idx]['estimated_end'] = estimated_end
             self._save_accounts()
             self._refresh_list()
 
@@ -555,8 +580,15 @@ class AccountPanel(ttk.Frame):
                     while waited < remaining:
                         if self._user_stop or not self.loop_var.get():
                             return
+                        if self._schedule_dirty:
+                            break
                         jitter_sleep(interval)
                         waited += interval
+                    if self._schedule_dirty:
+                        # 完成时间/账号列表在 GUI 中被修改，重新计算
+                        self._schedule_dirty = False
+                        print('[多账号] 账号配置已变更，重新计算下次执行时间')
+                        continue
                 elif remaining > 0:
                     jitter_sleep(1)
 
@@ -620,6 +652,7 @@ class AccountPanel(ttk.Frame):
             return
         self._user_stop = False
         self.stop_event.clear()
+        self._schedule_dirty = False
         self._schedule_thread = threading.Thread(target=self._schedule_monitor_thread, daemon=True)
         self._schedule_thread.start()
 
@@ -1142,7 +1175,8 @@ class AccountPanel(ttk.Frame):
 class _AccountDialog(tk.Toplevel):
     """添加/编辑账号的模态对话框"""
 
-    def __init__(self, parent, title='账号', name='', click_pos=None, scroll_before_click=0):
+    def __init__(self, parent, title='账号', name='', click_pos=None, scroll_before_click=0,
+                 estimated_end=''):
         super().__init__(parent)
         self.title(title)
         self.resizable(False, False)
@@ -1150,6 +1184,8 @@ class _AccountDialog(tk.Toplevel):
 
         self._click_pos = click_pos or [0, 0]
         self._scroll_before_click = scroll_before_click
+        # '—' 表示"无需制造"，在界面中显示为空（未设置）
+        self._estimated_end = '' if estimated_end in (None, '—', '-') else str(estimated_end)
 
         frame = ttk.Frame(self, padding=12)
         frame.pack(fill=tk.BOTH, expand=True)
@@ -1178,15 +1214,36 @@ class _AccountDialog(tk.Toplevel):
         self.scroll_var = tk.StringVar(value=str(self._scroll_before_click))
         ttk.Spinbox(frame, from_=0, to=10, width=8, textvariable=self.scroll_var).grid(row=4, column=1, sticky=tk.W, pady=4)
 
+        # 预计完成时间（HH:MM，留空表示未设置）
+        ttk.Label(frame, text='完成时间:').grid(row=5, column=0, sticky=tk.W, pady=4)
+        self.end_var = tk.StringVar(value=self._estimated_end)
+        self.end_entry = ttk.Entry(frame, width=8, textvariable=self.end_var)
+        self.end_entry.grid(row=5, column=1, sticky=tk.W, pady=4)
+
+        end_btns = ttk.Frame(frame)
+        end_btns.grid(row=5, column=2, sticky=tk.W, pady=4)
+        ttk.Button(end_btns, text='当前时间', width=8,
+                   command=self._set_now).pack(side=tk.LEFT)
+        ttk.Button(end_btns, text='清空', width=6,
+                   command=lambda: self.end_var.set('')).pack(side=tk.LEFT, padx=(4, 0))
+
+        ttk.Label(frame, text='格式 HH:MM（如 08:30），留空表示未设置；循环执行按此时间计算下次启动',
+                  foreground='gray', wraplength=320, justify=tk.LEFT).grid(
+            row=6, column=0, columnspan=3, sticky=tk.W, pady=(0, 4))
+
         # 按钮
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=5, column=0, columnspan=3, pady=(8, 0))
+        btn_row.grid(row=7, column=0, columnspan=3, pady=(8, 0))
         ttk.Button(btn_row, text='确定', command=self._ok).pack(side=tk.LEFT, padx=4)
         ttk.Button(btn_row, text='取消', command=self.destroy).pack(side=tk.LEFT, padx=4)
 
         # 模态
         self.grab_set()
         self.wait_window()
+
+    def _set_now(self):
+        """填入当前时间（HH:MM）"""
+        self.end_var.set(datetime.now().strftime('%H:%M'))
 
     def _capture(self):
         """3 秒后捕获鼠标位置"""
@@ -1213,5 +1270,12 @@ class _AccountDialog(tk.Toplevel):
         except ValueError:
             messagebox.showerror('错误', '坐标和滚轮次数必须为数字', parent=self)
             return
-        self.result = (name, [x, y], scroll)
+
+        # 解析完成时间（HH:MM，留空/—表示未设置）
+        estimated_end, err = parse_end_time(self.end_var.get())
+        if err:
+            messagebox.showerror('错误', err, parent=self)
+            return
+
+        self.result = (name, [x, y], scroll, estimated_end)
         self.destroy()

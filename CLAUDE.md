@@ -172,7 +172,7 @@ taskkill //f //pid <进程ID>
 
 `AccountPanel` 类（ttk.Frame），嵌入 GUI 的"多账号"标签页：
 
-- **账号列表** — Treeview 表格显示序号/名称/坐标/滚轮次数/启用/完成时间，支持添加/删除/编辑（双击）/上移/下移/启用禁用
+- **账号列表** — Treeview 表格显示序号/名称/坐标/滚轮次数/启用/完成时间，支持添加/删除/编辑（双击）/上移/下移/启用禁用；添加/编辑对话框（`_AccountDialog`）可直接设置**完成时间**（`estimated_end`，`HH:MM`，留空=未设置，"当前时间"/"清空"按钮），由 `parse_end_time()` 校验归一化（自动补零、兼容全角冒号），无需再手改 `data/accounts.yaml`
 - **控制面板** — 启动全部/停止按钮、循环执行勾选 + 循环间隔、自动执行至时 Spinbox（`auto_run_until_hour`）、自动补货配置（每日 2 点自动补货勾选、阈值、补货量、手动补货按钮）
 - **WeGame 配置** — 可滚动区域：WeGame 路径置顶整行（留空自动检测），下方左侧为登录阶段（1-3）+ 启动阶段（4-5）、右侧为导航阶段（6-9，含步骤 10/11 自动执行说明）；坐标字段支持"获取"按钮 3 秒倒计时捕获鼠标位置；退出方式不在 GUI 显示（`exit_method` 保留在 `data/accounts.yaml` 中，可手动编辑）；保存配置按钮
 - **调度控制** — 单轮制造循环（`_run_one_cycle`）、预约监控（`_schedule_monitor_thread`）、补货循环（`_run_replenish_cycle`）、2 点看门狗（`_replenish_watchdog`）、失败自动重试（最多 3 轮）
@@ -224,7 +224,7 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 ## 测试
 
-- **pytest 单元测试**（`tests/`，纯逻辑、不依赖游戏环境）— `tests/test_utils.py`（抖动/编码/YAML 往返/Tesseract 定位）、`tests/test_ocr.py`（best_match_item / time_to_seconds）。运行：`conda run -n deltaforce python -m pytest tests`（pytest 见 `requirements-dev.txt`）
+- **pytest 单元测试**（`tests/`，纯逻辑、不依赖游戏环境）— `tests/test_utils.py`（抖动/编码/YAML 往返/Tesseract 定位）、`tests/test_ocr.py`（best_match_item / time_to_seconds）、`tests/test_account_panel.py`（`parse_end_time` 完成时间解析）。运行：`conda run -n deltaforce python -m pytest tests`（pytest 见 `requirements-dev.txt`）
 - `list_OCR_test(department, categories)` — 验证指定部门物品类别的 OCR 识别效果
 - `test1()` — 枚举所有可见 Windows 窗口
 - `test2()` — 验证配置加载和 user_config 更新
@@ -242,4 +242,5 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 | v3.5 | `fa5b808` | 修复计时器OCR误读导致部门状态误判；UTF-8编码兼容回退机制；GUI多账号面板新增自动执行时段控件；手动更新配方按钮 |
 | v3.6 | `22c7aa0` | 新增每日自动补货功能：看门狗定时2点触发、独立补货循环、GUI配置阈值/补货量/手动补货按钮；钛合金和高级燃料使用独立quantity_region坐标 |
 | v3.7 | `753a69e` | 补货完成后自动整理仓库（步骤18-21 ESC→仓库→整理→确认）；推荐配方自动更新勾选（auto_update_recipes，默认开启可取消） |
-| v3.8 | `1ce519e` (HEAD) | 移除后台模式（删除 background_mode 分支与 alt_tab）；F8 改为系统级全局热键（keyboard.add_hotkey，游戏前台可用）；GUI 制造配方可修改（四部门一行并列只读下拉框，选项来自 config.yaml，保存写回 user_config.yaml）；多账号 WeGame 配置重排（路径置顶、左侧登录+启动、右侧导航、移除退出阶段） |
+| v3.8 | `1ce519e` | 移除后台模式（删除 background_mode 分支与 alt_tab）；F8 改为系统级全局热键（keyboard.add_hotkey，游戏前台可用）；GUI 制造配方可修改（四部门一行并列只读下拉框，选项来自 config.yaml，保存写回 user_config.yaml）；多账号 WeGame 配置重排（路径置顶、左侧登录+启动、右侧导航、移除退出阶段） |
+| v3.9 | (未提交) | 多账号账号编辑对话框新增"完成时间"编辑（`estimated_end`，HH:MM，留空=未设置，"当前时间"/"清空"按钮，`parse_end_time()` 校验归一化），无需手改 `data/accounts.yaml`；GUI 修改账号后预约监控立即重算下次执行时间（`_schedule_dirty`） |
