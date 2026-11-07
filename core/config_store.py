@@ -63,6 +63,11 @@ class IncorrectResolution(Exception):
 # ── 设置函数 ──────────────────────────────────────────
 
 def setup_output_directory(output_dir):
+    """清空并重建输出目录。
+
+    注意：debug 模式下每轮 dash_page() 开始时都会调用，因此 log/ 中的
+    历史截图（以及 EXE 模式下的 app.log）会被清除/占用。
+    """
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
@@ -81,6 +86,11 @@ def scale_coords(coords):
 
 
 def update_wait_list():
+    """刷新待制造队列。
+
+    每个部门只取 user_config 中的首项 [物品名, 数量]；制造成功后由
+    write_user_config() 消耗首项，下一轮自然顺延到下一项。
+    """
     def find_match(dep):
         target_name = user_config[dep][0][0]
         for key, value in config['departments'][dep].items():

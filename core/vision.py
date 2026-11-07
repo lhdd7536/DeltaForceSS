@@ -5,7 +5,6 @@
 departments_coords）通过 config_store 实时访问。
 """
 
-import hashlib
 import os
 from datetime import datetime
 
@@ -42,8 +41,12 @@ def cut_by_lines(list_img, horizontal_lines, min_area, prefix='cell'):
 
 # Screenshot
 def screenshot(type='binary', hint='placeholder', region=None):
-    """
-    region (x, y, w, h)
+    """截图并返回指定类型图像。
+
+    region (x, y, w, h) 为物理像素坐标（调用方通常已按分辨率缩放）。
+    type='binary' 使用 Otsu 阈值（全屏时额外 -10）二值化；
+    type='combined_binary' 则改用固定阈值 128 提取红色通道后与二值图异或
+    （debug 保存的 *_combinedBinary 图使用 Otsu，仅用于观察，与返回值不同）。
     """
     if region:
         x, y, w, h = region
@@ -104,15 +107,14 @@ def cropImage(image, region):
 
 # Debug
 def show_image(image):
+    """弹窗显示图像（仅手动调试使用，未接入自动化流程）"""
     cv2.imshow('image', image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
 def save_image(image_hint_region_tuples):
-    '''
-    (image, hint, region)
-    '''
+    '''保存 [(image, hint, region), ...] 到 OUTPUT_DIR，文件名带时间戳'''
     timestamp = datetime.now().strftime("%H_%M_%S_%f")[:-3]  # hh:mm:ss:sss
     for image, hint, region in image_hint_region_tuples:
         if region:
@@ -123,6 +125,7 @@ def save_image(image_hint_region_tuples):
 
 
 def debug_visualize_lines(image, lines):
+    """把检测到的分割线画到图像上并保存（调试用）"""
     # Create a copy of the image in RGB format
     image_with_lines = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2RGB)
 
@@ -130,11 +133,6 @@ def debug_visualize_lines(image, lines):
     for line in lines:
         x1, y1, x2, y2 = line[0]
         cv2.line(image_with_lines, (x1, y1), (x2, y2), (0, 255, 0), 1)  # green line thickness = 1 px
-
-    # show_image(image_with_lines)
-
-    # Generate unique hash from image data
-    image_hash = hashlib.md5(image_with_lines.tobytes()).hexdigest()[:8]
 
     save_image([(image_with_lines, 'list_lines', None)])
 

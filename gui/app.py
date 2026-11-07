@@ -17,7 +17,9 @@ from gui.main_window import MainWindow
 
 
 def main():
-    # 隐藏控制台时重定向 print 到日志文件
+    # 隐藏控制台（EXE）时 stdout 为 None，先重定向到 log/app.log 避免 print 抛错。
+    # 注意：MainWindow 构造后会把 stdout/stderr 换成内存队列（GUI 日志面板），
+    # 此后输出不再写入 app.log。
     if not sys.stdout:
         log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'log')
         log_dir = os.path.normpath(log_dir)

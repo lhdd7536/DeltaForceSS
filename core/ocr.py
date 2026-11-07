@@ -13,7 +13,10 @@ from core import config_store as cs
 
 
 def time_to_seconds(time_str):
-    """解析 'HH:MM:SS' / 'MM:SS' 为秒；解析失败返回 None"""
+    """解析三段 'HH:MM:SS' 为秒；其他格式（含 'MM:SS'）或解析失败返回 None。
+
+    仅支持三段格式是既有行为；游戏计时器目前也是 H:MM:SS。
+    """
     if time_str is None:
         return None
     try:
@@ -60,6 +63,10 @@ def OCR_price(image):
 
 
 def best_match_item(str1, reference):
+    """在 reference 中找与 str1 相似度最高的物品，返回 (物品名, 分数)。
+
+    分数为 rapidfuzz 的 fuzz.ratio（0-100）；reference 为空或无匹配时返回 (None, 0)。
+    """
     str1 = str1.strip()
     max_score = 0
     best_match = None

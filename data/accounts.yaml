@@ -1,3 +1,6 @@
+# 账号列表
+# estimated_end: 预计完成时间 HH:MM（'—' 表示本轮无需制造，由程序自动写入）
+# scroll_before_click: 点击账号前向下滚轮次数（第 4/5 个账号用）
 accounts:
   - name: 账号1
     click_pos:
@@ -50,15 +53,17 @@ wegame:
     - 1517
     - 930
   mode_btn_pos:
-    - 530
-    - 814
+    - 511
+    - 835
   dash_entry_pos:
     - 831
     - 58
   wait_before_app: 10
   wait_game_launch: 60
   wait_before_space: 7
+  # 历史遗留字段，当前代码不读取（保留以兼容旧配置）
   craft_start_wait: 70
+  # 退出方式：alt_f4 / wm_close / taskkill（GUI 不显示，手动编辑）
   exit_method: taskkill
   loop_interval: 28800
   wegame_path: H:\wegame\wegame.exe

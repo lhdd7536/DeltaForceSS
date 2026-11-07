@@ -147,7 +147,7 @@ def is_window_exist(class_name, title):
 # ── WeGame 管理 ──────────────────────────────────────
 
 def _find_wegame_hwnd():
-    """遍历窗口查找 WeGame 句柄（通过标题和进程名双重匹配）"""
+    """查找 WeGame 窗口句柄：枚举属于 wegame.exe 进程的可见窗口，优先返回标题含 "wegame" 的主窗口"""
 
     # 先收集 wegame.exe 进程下的所有窗口句柄
     wegame_pids = set()
@@ -212,7 +212,7 @@ def _find_wegame_path():
 
 def activate_wegame(wegame_path=None):
     """
-    确保 WeGame 在运行并返回窗口句柄（不强制置顶前台）。
+    确保 WeGame 在运行并返回窗口句柄（找到或启动后会置前，失败时继续执行）。
     如果 WeGame 未运行，尝试从指定路径启动。
     返回窗口句柄，失败返回 None。
 
@@ -390,7 +390,8 @@ def exit_game(method='alt_f4'):
 
 def wait_game_exit(timeout=30):
     """
-    等待游戏窗口关闭。
+    等待游戏窗口关闭（预留工具函数，当前账号调度未调用：
+    AccountPanel._exit_game() 自己轮询并处理停止信号）。
     超时则 taskkill 强制结束。
     返回 True=正常关闭，False=强制结束。
     """

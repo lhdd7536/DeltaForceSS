@@ -1,4 +1,4 @@
-[中文 README](readme.md)
+[中文 README](README.md)
 
 > This project is an enhanced fork of [yi-zelin/DeltaForceSS](https://github.com/yi-zelin/DeltaForceSS) (GPL v3).
 > Original author: yi-zelin. Thanks for the excellent work.
@@ -21,7 +21,7 @@ This fork adds the following features on top of the original single-account manu
 
 ### Multi-Account Batch Manufacturing
 Automates manufacturing across multiple accounts via WeGame account switching:
-- Account list management (enable/disable, estimated completion time tracking)
+- Account list management (enable/disable, estimated completion time tracking; completion time can be set directly in the account edit dialog)
 - Configurable WeGame click coordinates (grouped by phase) and per-step wait times
 - Three game exit methods: alt_f4 / wm_close / taskkill
 - Auto-handling of GameInputSvc foreground interference, WeGame path auto-detection
@@ -38,7 +38,7 @@ At a scheduled time (default 2:00 AM), logs into each account and navigates to Q
 
 ### GUI Interface
 Tkinter-based graphical interface with:
-- **Single-Account tab**: start/stop controls, status indicator, background/debug mode toggles, manufacturing recipe display, run logs
+- **Single-Account tab**: start/stop controls, status indicator, debug mode toggle, editable manufacturing recipes (read-only dropdowns sourced from `config.yaml`, saved to `user_config.yaml`), run logs
 - **Multi-Account tab**: account list management, schedule controls, replenishment config (threshold/quantity/manual button), WeGame coordinates grouped by phase (with "capture mouse position" support)
 - F8 global hotkey (configurable via `hotkey` in `user_config.yaml`), with instant stop response
 
@@ -86,11 +86,12 @@ Advanced settings (keep defaults recommended):
 4. The program will auto-switch to the game and start the cycle
 
 **Multi-account mode (requires `data/accounts.yaml`):**
-1. Configure the wegame.exe path
-2. Switch to the "Multi-Account" tab in the GUI
-3. **Configure WeGame coordinates** — click coordinates, per-step wait times, and exit method for each account must be adjusted based on your screen resolution and WeGame layout. See comments in `data/accounts.yaml` for details.
+1. Configure the wegame.exe path (leave empty in the GUI to auto-detect)
+2. Switch to the "Multi-Account" tab, add accounts and set click coordinates / scroll count; the estimated completion time can be set in the account edit dialog (leave empty = not set)
+3. **Configure WeGame coordinates** — click coordinates and per-step wait times are configured in the GUI (with "capture mouse position" support); the exit method (`exit_method`: alt_f4 / wm_close / taskkill, default taskkill) is not shown in the GUI and must be edited manually in `data/accounts.yaml`
 4. Click "▶ Start All" to begin the rotation
-5. Currently stable with 5 configured accounts (4th/5th use the scroll-before-click login)
+5. Check "Loop execution" to schedule the next round based on completion times (no confirmation before `auto_run_until_hour`)
+6. Currently stable with 5 configured accounts (4th/5th use the scroll-before-click login)
 
 ### 4. Notes
 - Pin target items in-game for better recognition
@@ -98,6 +99,7 @@ Advanced settings (keep defaults recommended):
 - The program reports an abnormal screen and retries every 30 seconds if not on the manufacturing page
 - `.300 BLK` must be pinned manually (three ammo types share the same name)
 - Auto-retries after ~30 seconds on item matching failure
+- Enable the "Debug mode" checkbox on the Single-Account tab (or set `debug_mode: true` in `user_config.yaml`) to save screenshots to `./log/` (the directory is cleared each round)
 - **Auto-crafting period: 0:00 ~ auto_run_until_hour** (default 11) — outside this window, a popup requires manual confirmation. Adjustable in `user_config.yaml`
 
 ## Project Info
@@ -110,7 +112,7 @@ Advanced settings (keep defaults recommended):
 - Multi-account batch manufacturing (WeGame switching)
 - GUI interface (real-time logs and status feedback)
 - PyInstaller EXE packaging
-- Auto-focus and minimize
+- Auto-focus the game window
 - Daily auto-replenishment (titanium alloy/advanced fuel, configurable threshold)
 - Auto warehouse sorting after replenishment
 

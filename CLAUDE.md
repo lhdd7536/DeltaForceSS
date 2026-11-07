@@ -43,11 +43,11 @@ cd H:\GithubProjects\DeltaForceSS
 build.bat
 ```
 
-`build.bat` 会自动：激活 conda 环境 → 清理旧输出 → `pyinstaller build.spec` → 将 `_internal/` 中的 `config.yaml`、`user_config.yaml`、`data`、`Tesseract-OCR` 移动到 EXE 同级。
+`build.bat` 会自动：直接调用 conda 环境的 `python.exe`（不经过 `activate`，规避 activate.bat 路径/编码问题）→ 清理旧输出 → `python -m PyInstaller build.spec` → 将 `_internal/` 中的 `config.yaml`、`user_config.yaml`、`data`、`Tesseract-OCR` 移动到 EXE 同级。
 
 > **注意**：EXE 模式下所有模块通过 `core.utils.project_root()`（基于 `sys.executable`）统一定位资源文件（`config.yaml`、`user_config.yaml`、`data/accounts.yaml` 等），因此启动时 CWD 无关紧要。打包前修改了源码后必须重新打包才会生效。
 >
-> 打包相关文件：`build.spec`（PyInstaller 配置，`runtime_hooks` 指向 `packaging/runtime_hook.py` 修复 Tcl/Tk 路径，datas 打包 `_tcl_data`/`_tk_data`）、`packaging/runtime_hook.py`（运行时设置 `TCL_LIBRARY`/`TK_LIBRARY` 环境变量）。GUI 隐藏控制台后 stdout 重定向到 `log/app.log`（见 `gui/app.py`）。
+> 打包相关文件：`build.spec`（PyInstaller 配置，`runtime_hooks` 指向 `packaging/runtime_hook.py` 修复 Tcl/Tk 路径，datas 打包 `_tcl_data`/`_tk_data`）、`packaging/runtime_hook.py`（运行时设置 `TCL_LIBRARY`/`TK_LIBRARY` 环境变量）。GUI 隐藏控制台时 `gui/app.py` 先把 stdout 重定向到 `log/app.log`；`MainWindow` 构造完成后 stdout/stderr 改为内存队列（GUI 日志面板），此后 `print` 不再写入 app.log。
 
 ### 关闭程序
 
@@ -72,39 +72,40 @@ taskkill //f //pid <进程ID>
 
 核心流程如下：
 
-1. **主循环** (`main(stop_event=None, status_callback=None, single_cycle=False)`) — 无限循环：蜂鸣 → 恢复游戏窗口（`UnrealWindow` / `三角洲行动  `）→ 检查分辨率 → 更新配置 → `dash_page()` → 可中断休眠到最短剩余时间 → 重复
-   - `stop_event`：threading.Event，设置后所有休眠立即中断（`_interruptible_sleep`，±20% 随机抖动最大 30s）
-   - `status_callback(remain_times, wait_list)`：每轮报告状态（GUI 刷新用）
+1. **主循环** (`main(stop_event=None, status_callback=None, single_cycle=False)`) — 无限循环：蜂鸣 → 恢复游戏窗口（`UnrealWindow` / `三角洲行动  `）→ 等待 6s → 检查分辨率并缩放坐标 → `update_wait_list()` → `dash_page()` → 回调 `status_callback(remain_times, wait_list)` → 可中断休眠 `min(remain_times)+30s` → 重复
+   - `stop_event`：threading.Event，设置后所有可中断休眠立即返回（`_interruptible_sleep`，±20% 随机抖动，最大 30s）
+   - `status_callback(remain_times, wait_list)`：每轮 dash_page 后回调；多账号模式用它捕获剩余时间（`MainWindow.status_queue` 只消费 `None` 哨兵，元组暂未被 GUI 使用）
    - `single_cycle=True`：仅执行一轮 dash_page 后返回（多账号"启动即走"模式用）
-2. **页面检测** (`is_main_page()`) — OCR 识别 `tech_dep_region` 区域是否含"技术中心"，失败 2 次后保存 `main_page_fail_full` / `main_page_fail_region` 截图到 `log/` 并抛出 `IncorrectPageError`
-3. **仪表盘** (`dash_page()`) — OCR 识别各部门状态（空闲/进行中/已完成）→ 收集已完成项（点击 + 空格键）→ 对有挂起项目的空闲部门触发 `list_page()`；随后最多 3 轮重试（间隔 5s，带 `valid_timer_count` 截屏有效性检查）处理轮次间新完成/空闲的部门
-4. **列表导航** (`list_page_operation()`) — 滚动可制造物品列表，OCR 识别物品名称，与配置模糊匹配（`fuzz.ratio` + 各部门 `OCR_factors` 阈值），滚动到底部判定"未找到"（含 `侧置` 特例），点击制造
-5. **制造与消耗** (`craft()`) — 点击物品 → `initalize_preparation()` 自动购买材料 → 点击建造按钮**成功后才** `write_user_config()` 消耗队列（避免制造失败时丢失配置项）
-6. **自动购买材料** (`initalize_preparation()` / `buy_material()`) — `find_buy_state()` 检测缺少材料（白像素占比判断 3/4 材料按钮状态）→ 打开交易行 → OCR 价格 → 点击购买，最多重试 11 次，无法购买的物品（高级燃料、钛合金）跳过
-7. **部门状态判定** (`department_status()`) — 先 OCR "空闲中"（`fuzz.ratio` > 60，避免单字子串误判）；非空闲则 OCR 计时器（`MM:SS` 白名单，`--psm 7`）：计时器区域空白 → 已完成(-1)；有文本但无法解析为时间 → 视为已完成（防 OCR 噪声如 `7` 误判）；可解析 → 返回剩余秒数
+   - 异常处理：`IncorrectPageError` → 蜂鸣、等待 30s 重试（`single_cycle` 直接返回）；其他异常 → `single_cycle` 或已设置 `stop_event` 时返回，否则 `input()` 等待回车后退出（CLI 模式）
+2. **页面检测** (`is_main_page()`) — 用 `--psm 7 -l chi_sim` OCR `tech_dep_region` 是否含"技术中心"；2 次都失败时保存 `main_page_fail_full` / `main_page_fail_region` 截图到 `log/` 并返回 False，由 `dash_page()` 抛出 `IncorrectPageError`
+3. **仪表盘** (`dash_page()`) — debug 模式先清空重建 `log/` → OCR 各部门状态（空闲/进行中/已完成）→ 已完成项：点击 + 空格键收集；空闲且有排队物品的部门：打开列表 → `list_page()`；随后最多 3 轮重试（每轮间隔 5s，`valid_timer_count` 检查截屏有效性——无任一部门计时器 >0 时跳过该轮），处理轮次间新完成/空闲的部门；最后重新截图汇总剩余时间返回（已完成/未占用计 0）
+4. **列表导航** (`list_page_operation()`) — 滚动可制造物品列表，OCR 识别物品名称，与配置模糊匹配（`fuzz.ratio` + 各部门 `OCR_factors` 阈值）；顶部物品与上次相似度达到阈值（且不含 `侧置`）时判定"未找到"；点击制造，100 次滚动仍无结果时按 esc 返回 False
+5. **制造与消耗** (`craft()`) — 点击物品 → `initalize_preparation()` 检查并补购材料 → 材料齐全才点击建造并 `write_user_config()` 消耗队列（材料不足则 esc 返回 False，不消耗；代码不校验建造按钮点击结果）
+6. **自动购买材料** (`initalize_preparation()` / `buy_material()` / `find_buy_state()`) — `find_buy_state()` 用白像素占比（≥5%）判断"三材料/四材料"缺料按钮（-1=不缺料）→ 点击缺料位置进入交易行 → `buy_material()` 循环 OCR 价格：识别到价格就点击购买并继续 OCR，最多 11 次；最后一轮仍识别到价格则 esc 返回 -1（缺货），OCR 不到价格返回 None。`initalize_preparation()` 打印 -1/0 提示后重新检测材料并返回是否已无缺料；无法购买的材料（高级燃料、钛合金）通常表现为价格 OCR 不到 → 最终由 `craft()` 按材料不足处理
+7. **部门状态判定** (`department_status()`) — 先 OCR "空闲中"（`fuzz.ratio` > 60，避免单字子串误判）；非空闲则 OCR 计时器（`--psm 7`，白名单 `0-9:`，实际格式 `H:MM:SS`）：区域空白（OCR None）→ 已完成(-1)；有文本但不是三段 `HH:MM:SS`（噪声 `7`、`MM:SS` 等）→ 也按已完成(-1)；可解析 → 返回剩余秒数
 
 ### 多账号模式 (`gui/account_panel.py` + `wegame_switcher.py`)
 
 以 `AccountPanel` (`gui/account_panel.py`) 为入口，按顺序遍历 `data/accounts.yaml` 中启用的账号，每个账号自动执行登录 → 制造 → 退出的完整流程：
 
-1. **激活 WeGame** — `activate_wegame()`：先找现有窗口（快速路径）；无窗口但进程存在 → 杀残留进程重启；两者皆无 → 自动检测路径启动（`_find_wegame_path()`：运行中进程 → 常见安装路径 → 遍历盘符），最多等 24s
+1. **激活 WeGame** — `activate_wegame()`：先按 `wegame.exe` 进程 + 可见窗口枚举找现有窗口（最多 6×1s）；找到则置前；无窗口 → 先 `exit_wegame()` 杀残留进程并等 7s，再用配置路径或 `_find_wegame_path()`（运行中进程 → 常见安装路径 → 遍历 D-H 盘符）启动，最多轮询 24s，找到窗口后再等 3s 渲染并置前
 2. **登录阶段（步骤 1-3）** — 点击账号管理 → 点击账号（`scroll_before_click > 0` 时先在同一位置向下滚轮 N 次，用于第 4/5 个账号）→ 点击登录
 3. **启动游戏（步骤 4-5）** — 等 `wait_before_app` 秒（点击前检测前台进程，若 GameInputSvc 抢前台则 taskkill）→ 点击三角洲行动应用 → 点击启动按钮
-4. **导航到制造（步骤 6-9）** — 轮询等游戏窗口出现（最长 `wait_game_launch` 秒，出现后等满总时长加载到主菜单）→ 双击烽火地带模式 → 等待后按 3 次空格跳过开场动画 → 按 Tab → 点击特勤处入口
-5. **执行制造（步骤 10）** — 以 `main()` + `single_cycle=True` 执行一轮完整 dash_page（启动即走，不等完成）；通过 `status_callback` 捕获各部门剩余时间，取最短者写入账号 `estimated_end`（预计完成时间，tech 部门排除）
-6. **退出** — 按配置的 `exit_method` (alt_f4/wm_close/taskkill) 退出游戏（带 30s 超时强制 taskkill 轮询），随后 `exit_wegame()` 强杀 WeGame，为下个账号准备干净环境
-7. **循环** — 所有账号处理完后，若账号间 `estimated_end` 相差超过 8h 判定有账号制造失败（`_cycle_has_failure`）；预约模式下失败自动重试，最多 3 轮
+4. **导航到制造（步骤 6-9）** — 轮询等游戏窗口出现（最长 `wait_game_launch` 秒，窗口出现后仍等满总时长以加载到主菜单）→ 连续两次点击烽火地带 → 等待 `wait_before_space` 秒后按 3 次空格跳过开场动画 → 按 Tab → 点击特勤处入口（补货模式跳过）
+5. **执行制造（步骤 10）** — 以 `main()` + `single_cycle=True` 执行一轮完整 dash_page（启动即走，不等完成）；`status_callback` 捕获的 `remain_times` 排除下标 0（tech）后取最小正值写入账号 `estimated_end`；无正值时写 `'—'`（表示本轮无需制造）
+6. **退出** — 按配置的 `exit_method`（alt_f4 / wm_close / taskkill，默认 taskkill）退出游戏，`_exit_game()` 轮询最多 30s，超时再强制 taskkill；随后 `exit_wegame()` 强杀 WeGame，为下个账号准备干净环境
+7. **循环** — 所有账号处理完后，若各账号 `estimated_end` 的最大最小差（按分钟、跨天修正）超过 8h，判定有账号制造失败（`_cycle_has_failure`）；仅预约模式（`_is_monitoring`）下自动重试，最多 3 轮
 
-**循环执行（预约监控）** — GUI 勾选"循环执行"后启动监控线程：按所有账号 `estimated_end` 最晚时间 + 1 分钟计算下次执行；`auto_run_until_hour` 之前自动执行不弹窗，之后弹窗确认（`messagebox.askyesno`）；无完成时间记录时降级用 `loop_interval` 固定间隔（默认 28800s）。
+**循环执行（预约监控）** — GUI 勾选"循环执行"后启动监控线程：按所有账号 `estimated_end` 最晚时间 + 1 分钟计算下次执行（已过则顺延一天）；无完成时间记录时降级用 `loop_interval` 固定间隔（默认 28800s）。等待期间每 0.5s 检查停止信号与 `_schedule_dirty`（GUI 修改账号/完成时间后重算）；到达后若当前小时 `<= auto_run_until_hour` 自动执行，否则弹窗确认（`messagebox.askyesno`）。
 
 ### 自动补货模式
 
-每日 2:00 定时触发（`_replenish_watchdog` 看门狗线程，随多账号调度启动/预约监控启动时一并启动），或通过"手动补货"按钮启动。按顺序遍历启用账号，登录游戏后导航到军需处 → 收集品界面（`replenishment.py`），检查钛合金和高级燃料库存，低于阈值时自动购买补货，补货完成后自动整理仓库（ESC → 仓库 → 整理 → 确认，步骤 18-21）。两种材料使用独立的 OCR 坐标：
+每日 2:00 定时触发（`_replenish_watchdog` 看门狗线程，"启动全部"与"预约监控"启动时都会拉起，醒来后先检查 `auto_replenish.enabled`），或通过"手动补货"按钮启动。按顺序遍历启用账号，登录游戏后导航到军需处 → 收集品界面（`replenishment.py`）：点击材料 → OCR 库存数量 → 低于阈值时点击"增加购买数量" N 次 → 一键补齐 → 点击购买两次（第二次用于确认弹窗）→ 补货完成后整理仓库（ESC → 仓库 → 整理 → 确认，步骤 18-21）。两种材料使用独立的 OCR 坐标：
 
 - 钛合金 `quantity_region: [1668, 774, 12, 19]`
 - 高级燃料 `quantity_region: [1593, 774, 12, 19]`
 
-补货登录跳过"点击特勤处"步骤（`_login_and_navigate(..., skip_step9=True)`，由补货流程自行导航）。2:00 触发时若制造循环正在运行，则标记 `_replenish_after_cycle`，等本轮制造结束后再执行补货。
+补货登录跳过"点击特勤处"步骤（`_login_and_navigate(..., skip_step9=True)`，由补货流程自行导航）。2:00 触发时若制造循环正在运行，则标记 `_replenish_after_cycle`，在本轮 `_run_one_cycle` 的 finally 中（重试逻辑之后）再执行补货。
 
 ## 核心模块
 
@@ -114,15 +115,15 @@ taskkill //f //pid <进程ID>
 
 ### `core/automator.py` — 单账号制造业务流程
 
-主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、蜂鸣。状态经 `from core import config_store as cs` 实时访问。
+主循环 `main()`、仪表盘 `dash_page()`（含 3 轮重试）、列表导航 `list_page_operation()`、制造与消耗 `craft()`、自动购买材料（`initalize_preparation` / `buy_material` / `find_buy_state`）、部门状态判定 `department_status()`、页面检测 `is_main_page()`、可中断休眠 `_interruptible_sleep()`、滚动 `scroll_down_x4()`、倒计时信息 `print_restart_info()`、蜂鸣。状态经 `from core import config_store as cs` 实时访问。
 
 ### `core/config_store.py` — 配置与全局状态
 
-集中管理 `config` / `user_config` / `OUTPUT_DIR` / `TESSERACT_PATH` / `scale_factor` / `departments_coords` / `debug_mode` / `wait_list` / `_global_stop_event` 的加载与读写（import 时加载，与原 main.py 行为一致），以及 `scale_coords()` / `update_wait_list()` / `write_user_config()`（ruamel 保留注释）/ `set_screen_resolution()` / `setup_output_directory()`。
+集中管理 `config` / `user_config` / `OUTPUT_DIR` / `TESSERACT_PATH` / `scale_factor` / `departments_coords` / `debug_mode` / `wait_list` / `_global_stop_event` 的加载与读写（import 时加载，与原 main.py 行为一致），以及 `scale_coords()` / `update_wait_list()`（每部门只取队列首项）/ `write_user_config()`（ruamel 保留注释，制造后消耗首项）/ `set_screen_resolution()`（校验 `valid_resolution`，非法抛 `IncorrectResolution`）/ `setup_output_directory()`（清空重建）。
 
 ### `core/vision.py` — 截图与图像处理
 
-`cut_by_lines()`、`screenshot()`（PIL `ImageGrab.grab()` → OpenCV 灰度/Otsu 二值化，debug_mode 下保存 original/gray/binary/combinedBinary 到 `log/`）、`cropImage()`、`save_image()`、`debug_visualize_lines()`、`match_list_items()`（列表分割线检测 + 单元格切分）。
+`cut_by_lines()`、`screenshot()`（PIL `ImageGrab.grab()` → OpenCV 灰度/Otsu 二值化；`combined_binary` 类型改用固定阈值 128 提取红色通道后异或，debug 保存的 combinedBinary 图仍用 Otsu 仅作观察）、`cropImage()`、`save_image()`、`debug_visualize_lines()`、`match_list_items()`（列表分割线检测 + 单元格切分）。debug_mode 下保存 original/gray/binary/combinedBinary 到 `log/`。
 
 ### `core/ocr.py` — OCR 识别与文本匹配
 
@@ -138,12 +139,12 @@ taskkill //f //pid <进程ID>
 - **鼠标点击** (`click_position`) — 缩放坐标后加入 ±3px 随机偏移和随机移动时长（0.2-0.5s），模拟真人操作；`pyautogui.FAILSAFE = False`
 - **账号点击** — `click_account`（直接点击）/ `scroll_then_click`（先向下滚轮 N 次再点击，用于超出可视范围的账号）
 - **导航步骤函数** — `click_account_management` / `click_game_app` / `click_launch_btn` / `click_game_mode` / `press_space_x3` / `press_tab` / `click_dash_entry`
-- **游戏退出** (`exit_game`) — 支持 alt_f4 / wm_close / taskkill 三种退出方式；`wait_game_exit()` 轮询等待窗口关闭，超时强制结束
+- **游戏退出** (`exit_game`) — 支持 alt_f4 / wm_close / taskkill 三种退出方式；`wait_game_exit()` 为预留的轮询等待函数（`AccountPanel._exit_game()` 自行轮询并响应停止信号，当前未调用）
 - **进程管理** — `exit_wegame()` 强杀 WeGame 进程（`_hide_cmd` 用 `subprocess.CREATE_NO_WINDOW` 隐藏命令行窗口）
 
 ### `core/replenishment.py` — 制造材料补货模块
 
-自动导航到军需处 → 收集品界面，OCR 识别钛合金/高级燃料库存数量（`OCR_quantity`，`--psm 7` 数字白名单），低于阈值时点击增加数量/一键补齐/购买完成补货。坐标从 `config.yaml` 的 `replenish_coords` 加载，每个材料独立的 `quantity_region`（`click_position` 内部缩放，region 在本模块内缩放）。
+自动导航到军需处 → 收集品界面，OCR 识别钛合金/高级燃料库存数量（`OCR_quantity`，`--psm 7` 数字白名单），低于阈值时点击增加数量/一键补齐/购买（点两次）完成补货，最后整理仓库。坐标从 `config.yaml` 的 `replenish_coords` 加载；`click_position` 内部缩放 click 坐标，`quantity_region` 在本模块内按 `pyautogui.size()` 缩放。
 
 ### `core/utils.py` — 共享工具（全项目统一复用）
 
@@ -154,11 +155,11 @@ taskkill //f //pid <进程ID>
 - `load_yaml(path)` — PyYAML safe_load + 编码回退（只读场景）
 - `load_ruamel(path)` / `dump_yaml_rt(path, data)` — ruamel 读写（保留注释与 flow style），供需要写回配置的场景使用
 - `resolve_tesseract_path(configured_path=None)` — 定位 tesseract.exe：配置路径 → `dist/Tesseract-OCR` → 项目根 `Tesseract-OCR`
-- `click_at(x, y, jitter=3)` — 屏幕坐标点击原语（不做缩放）：±jitter 随机偏移 + 0.2-0.5s 随机移动时长；`main.py` 与 `wegame_switcher.py` 的 `click_position()` 均基于它实现
+- `click_at(x, y, jitter=3)` — 屏幕坐标点击原语（不做缩放）：±jitter 随机偏移 + 0.2-0.5s 随机移动时长；`core/automator.py` 与 `core/wegame_switcher.py` 的 `click_position()` 均基于它实现
 
 ### `gui/app.py` — 启动入口
 
-隐藏控制台时（EXE 模式）将 stdout 重定向到 `log/app.log`，创建 `MainWindow`。
+隐藏控制台时（EXE 模式，`sys.stdout` 为 None）先把 stdout 重定向到 `log/app.log`，再创建 `MainWindow`；`MainWindow.__init__` 完成后 stdout/stderr 会被换成 GUI 日志队列。
 
 ### `gui/main_window.py` — 主窗口
 
@@ -167,24 +168,26 @@ taskkill //f //pid <进程ID>
 - **单账号标签页** — 启动/停止按钮、状态指示灯（红/绿/橙）、调试模式勾选（写回 `user_config.yaml`）、快捷键提示、制造配方面板（四部门一行并列，只读 Combobox 下拉选择制造物品，选项直接来自 `config.yaml` 的 `departments`（该部门全部物品），保存按钮 `_save_recipes()` 写回 `user_config.yaml` 保留原数量，未选择部门保持原状）、运行日志（stdout 重定向到队列，主线程 100ms 轮询刷新）
 - **多账号标签页** — AccountPanel 实例
 - **快捷键** — 从 `user_config.yaml` 的 `hotkey` 字段读取（默认 `f8`），通过 `keyboard.add_hotkey` 注册为系统级全局热键（游戏前台也可用，带 1s 节流防连按，注册失败降级为窗口内 bind），切换逻辑：单账号运行中→停止；多账号运行中→停止调度；否则启动单账号
+- **关闭清理** — `_on_close()` 注销全局热键、停止单账号/多账号线程（各 join 3s）、恢复 stdout 后 destroy
+- **状态队列** — `status_queue` 只识别 `None` 哨兵（自动化线程结束）；多账号写入的 `(remain_times, wait_list)` 元组目前未被消费
 
 ### `gui/account_panel.py` — 多账号管理面板
 
 `AccountPanel` 类（ttk.Frame），嵌入 GUI 的"多账号"标签页：
 
 - **账号列表** — Treeview 表格显示序号/名称/坐标/滚轮次数/启用/完成时间，支持添加/删除/编辑（双击）/上移/下移/启用禁用；添加/编辑对话框（`_AccountDialog`）可直接设置**完成时间**（`estimated_end`，`HH:MM`，留空=未设置，"当前时间"/"清空"按钮），由 `parse_end_time()` 校验归一化（自动补零、兼容全角冒号），无需再手改 `data/accounts.yaml`
-- **控制面板** — 启动全部/停止按钮、循环执行勾选 + 循环间隔、自动执行至时 Spinbox（`auto_run_until_hour`）、自动补货配置（每日 2 点自动补货勾选、阈值、补货量、手动补货按钮）
-- **WeGame 配置** — 可滚动区域：WeGame 路径置顶整行（留空自动检测），下方左侧为登录阶段（1-3）+ 启动阶段（4-5）、右侧为导航阶段（6-9，含步骤 10/11 自动执行说明）；坐标字段支持"获取"按钮 3 秒倒计时捕获鼠标位置；退出方式不在 GUI 显示（`exit_method` 保留在 `data/accounts.yaml` 中，可手动编辑）；保存配置按钮
-- **调度控制** — 单轮制造循环（`_run_one_cycle`）、预约监控（`_schedule_monitor_thread`）、补货循环（`_run_replenish_cycle`）、2 点看门狗（`_replenish_watchdog`）、失败自动重试（最多 3 轮）
+- **控制面板** — 启动全部/停止按钮、循环执行勾选 + 循环间隔、自动执行至时 Spinbox（`auto_run_until_hour`）、自动补货配置（每日 2 点自动补货勾选、阈值、补货量、手动补货按钮）；`_save_user_config()` 同时写回 `auto_run_until_hour` 与 `auto_replenish`
+- **WeGame 配置** — 可滚动区域：WeGame 路径置顶整行（留空自动检测），下方左侧为登录阶段（1-3）+ 启动阶段（4-5）、右侧为导航阶段（6-9，含步骤 10/11 自动执行说明）；坐标字段支持"获取"按钮 3 秒倒计时捕获鼠标位置；退出方式不在 GUI 显示（`exit_method` 保留在 `data/accounts.yaml` 中，可手动编辑）；保存配置按钮（同时保存坐标、等待时长、`loop_interval`、`wegame_path`）
+- **调度控制** — 单轮制造循环（`_run_one_cycle`）、预约监控（`_schedule_monitor_thread`）、补货循环（`_run_replenish_cycle`）、2 点看门狗（`_replenish_watchdog`，在"启动全部"和"预约监控"启动时拉起）、失败自动重试（最多 3 轮，仅预约模式）；`_poll_next_cycle()` 每秒刷新"下次执行"标签
 - **状态反馈** — 实时日志（统一由单账号日志区域输出）、当前账号/步骤状态标签
 
 ## 配置文件
 
-- `config.yaml` — 物品数据库 (`departments`，按部门/类别分级，S10 赛季物品)、屏幕坐标 (`departments_coords`：dash_page 各部门 free/timmer 区域、列表 list_point/list_size/item_size、交易行 price/buy、build_position、tech_dep_region)、各部门 OCR 配置 (`OCR_configs`) 与匹配阈值 (`OCR_factors`：tech 71 / work 96.5 / medical 80 / armor 80)、补货坐标 (`replenish_coords` 含各材料 click/quantity_region)
-- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`，`[物品名, 数量]`，-1 为无限)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径 (`TESSERACT_PATH`)、快捷键 (`hotkey`)、调试模式开关 (`debug_mode`)、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
+- `config.yaml` — 物品数据库 (`departments`，按部门/类别分级；当前物品表为 S10 赛季，S11/S12 只更新了模式选择坐标，新增物品需手动补充)、屏幕坐标 (`departments_coords`：`dash_page` 各部门 `free`/`free_size`/`timmer`/`timmer_size`、`list_point`/`list_size`/`item_size`/`list_black_spot`、`price_point`/`price_size`/`price_position`、`buy_points`/`buy_positions`/`buy_size`、`build_position`、`tech_dep_region`、`standard_screen`)、各部门 OCR 配置 (`OCR_configs`，work 带字符白名单) 与匹配阈值 (`OCR_factors`：tech 71 / work 96.5 / medical 80 / armor 80)、补货坐标 (`replenish_coords` 含各材料 click/quantity_region)
+- `user_config.yaml` — 用户制造队列 (`tech/work/medical/armor`，`[物品名, 数量]`，-1 为无限；每部门只处理首项，完成后顺延)、自动执行时段 (`auto_run_until_hour`)、Tesseract 路径 (`TESSERACT_PATH`)、快捷键 (`hotkey`)、调试模式开关 (`debug_mode`)、自动补货配置 (`auto_replenish` 含 enabled/threshold/quantity)
 - `data/accounts.yaml` — 多账号配置：
-  - `accounts` — 账号列表（名称、点击坐标 `click_pos`、是否启用、预计完成时间 `estimated_end`、滚动次数 `scroll_before_click`）
-  - `wegame` — WeGame 操作坐标（`switch_account_btn_pos`、`login_btn_pos`、`game_app_pos`、`launch_btn_pos`、`mode_btn_pos`、`dash_entry_pos`）和各步骤等待时长（`wait_before_app`、`wait_game_launch`、`wait_before_space`）、`exit_method`、`loop_interval`、`wegame_path`
+  - `accounts` — 账号列表（名称、点击坐标 `click_pos`、是否启用 `enabled`、预计完成时间 `estimated_end`、滚动次数 `scroll_before_click`）。`estimated_end` 为 `HH:MM`，`'—'` 表示本轮无需制造（程序自动写入，也可在 GUI 对话框设置时间）
+  - `wegame` — WeGame 操作坐标（`switch_account_btn_pos`、`login_btn_pos`、`game_app_pos`、`launch_btn_pos`、`mode_btn_pos`、`dash_entry_pos`）和各步骤等待时长（`wait_before_app`、`wait_game_launch`、`wait_before_space`）、`exit_method`（默认 taskkill，GUI 不显示）、`loop_interval`、`wegame_path`；`craft_start_wait` 为历史遗留字段，代码不读取
 
 ## 关键机制
 
@@ -205,11 +208,11 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 ### 截屏与识别 (单账号模式)
 
-使用 PIL `ImageGrab.grab()` 截取屏幕（`screenshot()`，已从 dxcam 迁移），经 OpenCV 处理（灰度化、Otsu 二值化），Tesseract OCR 识别文字，`rapidfuzz` 进行字符串匹配。
+使用 PIL `ImageGrab.grab()` 截取屏幕（`screenshot()`，已从 dxcam 迁移），经 OpenCV 处理（灰度化、Otsu 二值化），Tesseract OCR 识别文字，`rapidfuzz` 进行字符串匹配。debug_mode 下 `dash_page()` 每轮开始会清空重建 `log/`，截图按 `{时间戳}_{hint}*.png` 保存；`tech_dep_region` 检测失败时额外保存全屏与区域两张失败截图。
 
 - **空闲检测** (`OCR_is_free`) 使用 `fuzz.ratio`（完整匹配），阈值 > 60，避免单字子串误匹配为"空闲中"
 - **物品名称匹配** (`best_match_item`) 使用 `fuzz.ratio`，配合各部门独立的 `OCR_factors` 阈值；`OCR_item_name` 有手动修正（"番"→"盔"）
-- **计时器 OCR** — OCR 识别制造剩余时间（格式 `MM:SS`），用于判断部门状态是"进行中"还是"已完成"。需注意 OCR 误读（如 `O` → `0`、`l` → `1`）可能导致完成状态被误判为进行中；反过来计时器区域有噪声文本但无法解析为时间时按已完成处理
+- **计时器 OCR** — OCR 识别制造剩余时间（实际格式 `H:MM:SS`，白名单 `0-9:`），用于判断部门状态是"进行中"还是"已完成"。需注意 OCR 误读（如 `O` → `0`、`l` → `1`）可能导致完成状态被误判为进行中；反过来计时器区域有噪声文本但无法解析为三段格式时按已完成处理。`time_to_seconds()` 只接受三段，`MM:SS` 同样会被当作"已完成"
 
 ### UTF-8 编码兼容
 
@@ -220,7 +223,7 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 
 ### 可中断休眠
 
-所有长休眠通过 `_interruptible_sleep`（main.py）/ `_wait_check`（account_panel.py）/ `jitter_sleep`（utils.py）实现，停止信号（`stop_event` / `_user_stop`）触发时立即返回，实现 GUI 停止按钮与快捷键的即时响应。
+可中断的长休眠通过 `_interruptible_sleep`（automator.py）和 `_wait_check`（account_panel.py）实现，停止信号（`stop_event` / `_user_stop`）触发时立即返回，实现 GUI 停止按钮与快捷键的即时响应；`jitter_sleep`（utils.py）只做 ±20% 抖动，本身不检查停止信号，用于短等待或不敏感等待。
 
 ## 测试
 
@@ -228,9 +231,9 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 - `list_OCR_test(department, categories)` — 验证指定部门物品类别的 OCR 识别效果
 - `test1()` — 枚举所有可见 Windows 窗口
 - `test2()` — 验证配置加载和 user_config 更新
-- `test_ocr_qty*.py` / `test_scan_full.py` — 补货 OCR 数量识别调试脚本（扫描数字区域、投影分析，需 `.img/` 下截图，未纳入版本控制）
-- 在 `user_config.yaml` 中启用 `debug_mode: true` 可将截图保存到 `./log/`
-- 设计文档位于 `docs/superpowers/specs/`（PyInstaller 打包方案、补货功能设计）与 `docs/superpowers/plans/`
+- `scripts/test_ocr_qty*.py` / `scripts/test_scan_full.py` — 补货 OCR 数量识别调试脚本（扫描数字区域、投影分析，需 `.img/` 下截图，未纳入版本控制）
+- 在 `user_config.yaml` 中启用 `debug_mode: true` 可将截图保存到 `./log/`（每轮 dash_page 会清空该目录）
+- 设计文档位于 `docs/superpowers/specs/`（PyInstaller 打包方案、补货功能设计）与 `docs/superpowers/plans/`；这些是历史设计稿，最终实现以本文件与源码为准
 
 ## 版本历史
 
@@ -244,3 +247,5 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 | v3.7 | `753a69e` | 补货完成后自动整理仓库（步骤18-21 ESC→仓库→整理→确认）；推荐配方自动更新勾选（auto_update_recipes，默认开启可取消） |
 | v3.8 | `1ce519e` | 移除后台模式（删除 background_mode 分支与 alt_tab）；F8 改为系统级全局热键（keyboard.add_hotkey，游戏前台可用）；GUI 制造配方可修改（四部门一行并列只读下拉框，选项来自 config.yaml，保存写回 user_config.yaml）；多账号 WeGame 配置重排（路径置顶、左侧登录+启动、右侧导航、移除退出阶段） |
 | v3.9 | `b6188e1` | 多账号账号编辑对话框新增"完成时间"编辑（`estimated_end`，HH:MM，留空=未设置，"当前时间"/"清空"按钮，`parse_end_time()` 校验归一化），无需手改 `data/accounts.yaml`；GUI 修改账号后预约监控立即重算下次执行时间（`_schedule_dirty`） |
+| v3.10 | `17d71ca` | 适配 S11 游戏模式选择界面：步骤 6 烽火地带坐标改为 (530, 814)（GUI 默认值与 `data/accounts.yaml` 同步） |
+| v3.13 | 待补记 | 适配 S12 游戏模式选择界面：步骤 6 烽火地带坐标改为 (511, 835)（GUI 默认值与 `data/accounts.yaml` 同步） |

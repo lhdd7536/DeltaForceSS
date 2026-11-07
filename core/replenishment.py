@@ -2,7 +2,7 @@
 制造材料补货模块。
 
 在多账号模式下，导航到军需处 -> 收集品界面，检查钛合金和高级燃料库存，
-低于阈值时自动补货。
+低于阈值时自动补货，最后整理仓库（ESC -> 仓库 -> 整理 -> 确认）。
 
 坐标由调用方传入（从 config.yaml replenish_coords 加载），基于 1920x1080 基准，
 click_position 内部会自动缩放，OCR 截图区域在此模块内缩放。
@@ -86,6 +86,7 @@ def do_replenish_materials(coords, threshold, quantity):
             jitter_sleep(0.3)
         click_position(coords['fill_btn'])
         jitter_sleep(1)
+        # 连续点击两次购买：第二次用于确认购买弹窗
         click_position(coords['buy_btn'])
         jitter_sleep(1)
         click_position(coords['buy_btn'])

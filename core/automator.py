@@ -72,7 +72,7 @@ def craft(coordination, department=None):
     if has_all_materials:
         click_position(build_position)
         _interruptible_sleep(3)
-        # 点击建造成功后才消耗队列（避免制造失败时丢失配置项）
+        # 材料齐全才点击建造并消耗队列；此处不校验建造按钮点击是否成功
         if department:
             cs.write_user_config(department)
         keyboard.send('esc')
@@ -95,6 +95,13 @@ def low_beep():
 
 
 def buy_material():
+    """在交易行价格页循环点击购买。
+
+    返回：
+        -1  : 达到最大尝试次数（11 次）仍能识别到价格，判定缺货
+        int : OCR 识别到的价格（0 表示价格区域被识别为 0，较为罕见）
+        None: 价格区域 OCR 不到数字（已离开价格页 / 无法购买）
+    """
     # purchase page
     x, y = cs.departments_coords['price_point']
     w, h = cs.departments_coords['price_size']
@@ -109,7 +116,7 @@ def buy_material():
                 keyboard.send('esc')
                 _interruptible_sleep(1)
                 return -1
-            # cleck price to buy
+            # 点击购买按钮后继续 OCR，直到识别不到价格或达到重试上限
             click_position(cs.departments_coords['price_position'])
             _interruptible_sleep(3)
         else:
@@ -137,6 +144,11 @@ def find_buy_state():
 
 
 def initalize_preparation():
+    """检查并补购缺料，返回材料是否已齐全。
+
+    buy_material() 返回 None（价格 OCR 不到，如高级燃料/钛合金无法购买）时
+    不做额外处理，最终由重新检测的 buy_state 决定；craft() 会据此放弃建造。
+    """
     buy_state = find_buy_state()
     if buy_state == -1:
         return True
@@ -160,6 +172,7 @@ def department_status(dash_img, dep_coords, dep_name=''):
     return remain time in sec
     -1: done (completed & ready to collect)
     -2: not started (idle)
+    其余: 计时器剩余秒数（H:MM:SS 三段）；有文本但无法解析时也按已完成 -1 处理
     '''
     prefix = f'[{dep_name}]' if dep_name else ''
 
@@ -407,9 +420,13 @@ def main(stop_event=None, status_callback=None, single_cycle=False):
     """自动制造主循环
 
     Args:
-        stop_event: threading.Event, 设置后中断循环
-        status_callback: callable, 每次迭代报告 (remain_times, wait_list) 状态
-        single_cycle: bool, 仅执行一轮 dash_page 后返回（多账号使用）
+        stop_event: threading.Event, 设置后所有可中断休眠立即返回；None 表示不响应停止
+        status_callback: callable, 每轮 dash_page 后回调 (remain_times, wait_list)
+            —— 多账号模式用它捕获剩余时间；GUI 主窗口的 status_queue 目前只消费 None 哨兵
+        single_cycle: bool, 仅执行一轮 dash_page 后返回（多账号"启动即走"使用）
+
+    异常处理：IncorrectPageError 等待 30s 重试；其他异常在 single_cycle 或
+    stop_event 存在时直接返回，否则 input() 等待回车退出（CLI 模式）。
     """
     cs._global_stop_event = stop_event
 

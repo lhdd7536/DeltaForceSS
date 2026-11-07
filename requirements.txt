@@ -1,5 +1,4 @@
 # 核心依赖（全部为运行必需）
-# 可选依赖（每日推荐配方抓取）见 requirements-optional.txt
 beautifulsoup4==4.13.4
 keyboard==0.13.5
 numpy==2.2.4

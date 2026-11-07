@@ -1,5 +1,11 @@
 # PyInstaller 打包方案
 
+> **实现备注（后续校对）**：本文是设计阶段文档，最终实现以 `build.bat` / `build.spec` 为准：
+> - `build.bat` 直接调用 `D:\Anaconda3\envs\deltaforce\python.exe -m PyInstaller build.spec`，不再经过 `conda run` / `activate`。
+> - `build.spec` 额外打包 conda 环境的 `tcl8.6`/`tk8.6` 为 `_tcl_data`/`_tk_data`，并通过 `packaging/runtime_hook.py` 设置 `TCL_LIBRARY`/`TK_LIBRARY`。
+> - 构建后由 `build.bat` 将 `_internal/` 下的配置文件与 `data`/`Tesseract-OCR` 移到 EXE 同级。
+> - stdout 重定向到 `log/app.log` 只覆盖启动早期；`MainWindow` 创建后输出改为 GUI 日志队列。
+
 将 Delta Force 自动制造程序打包为独立的 Windows 可执行文件，无需 Python 环境和 IDE 即可运行。
 
 ## 输出格式

@@ -1,7 +1,8 @@
 """
 多账号管理面板 - 嵌入 MainWindow 的"多账号"标签页。
 
-管理账号列表、WeGame 配置，按顺序调度多账号自动制造。
+管理账号列表与 WeGame 配置，按顺序调度多账号自动制造；
+另含预约监控（循环执行）与每日 2 点自动补货的看门狗线程。
 """
 
 import re
@@ -127,7 +128,7 @@ class AccountPanel(ttk.Frame):
             return {'enabled': False, 'threshold': 3, 'quantity': 3}
 
     def _save_user_config(self):
-        """保存 auto_run_until_hour 到 user_config.yaml"""
+        """保存 auto_run_until_hour 与 auto_replenish 到 user_config.yaml"""
         try:
             cfg = _load_yaml(USER_CONFIG_FILE)
             cfg['auto_run_until_hour'] = self._auto_run_hour
@@ -331,7 +332,7 @@ class AccountPanel(ttk.Frame):
         # ── 导航阶段（步骤 6-9），右侧 ──
         phase3 = ttk.LabelFrame(wg_inner, text='导航阶段（步骤 6-9）', padding=4)
         phase3.grid(row=1, column=1, rowspan=2, sticky='nsew', padx=2, pady=2)
-        _add_coord_row(phase3, '6', '烽火地带', 'mode_btn_pos', [530, 814])
+        _add_coord_row(phase3, '6', '烽火地带', 'mode_btn_pos', [511, 835])
         _add_wait_row(phase3, '     游戏加载等待:', 'wait_game_launch', 80)
         ttk.Label(phase3, text='步骤7 按空格:  (自动执行，跳过开场动画)').pack(anchor=tk.W, pady=1)
         _add_wait_row(phase3, '     跳动画前等待:', 'wait_before_space', 10)
@@ -703,7 +704,7 @@ class AccountPanel(ttk.Frame):
         self.scheduler_thread = threading.Thread(target=self._run_one_cycle, daemon=True)
         self.scheduler_thread.start()
 
-        # 启动补货看门狗（守护线程）
+        # 启动补货看门狗（守护线程；是否补货由触发时的 auto_replenish.enabled 决定）
         self._replenish_watchdog_thread = threading.Thread(
             target=self._replenish_watchdog, daemon=True)
         self._replenish_watchdog_thread.start()
@@ -807,7 +808,7 @@ class AccountPanel(ttk.Frame):
 
         wegame_switcher.bring_to_foreground(hwnd)
         jitter_sleep(1)
-        mode_pos = wg_cfg.get('mode_btn_pos', [530, 814])
+        mode_pos = wg_cfg.get('mode_btn_pos', [511, 835])
         wegame_switcher.click_game_mode(mode_pos)
         jitter_sleep(1)
         wegame_switcher.click_game_mode(mode_pos)
@@ -934,6 +935,8 @@ class AccountPanel(ttk.Frame):
                 latest_remain_times = [0, 0, 0, 0]
 
                 def _capture_callback(remain_times, wait_list):
+                    # 送入 status_queue 的元组目前没有被 MainWindow 消费
+                    # （_poll_loop 只识别 None 哨兵），保留供后续扩展
                     nonlocal latest_remain_times
                     latest_remain_times = remain_times
                     self.main_window.status_queue.put((remain_times, wait_list))
@@ -948,7 +951,7 @@ class AccountPanel(ttk.Frame):
                 except Exception as e:
                     print(f'{name}: 制造异常: {e}')
 
-                # 计算预计完成时间（取各部门最短剩余时间）
+                # 计算预计完成时间（取各部门最短剩余时间；下标 0 为 tech，予以排除）
                 valid_times = [t for t in latest_remain_times[1:] if t > 0]
                 min_remain = min(valid_times) if valid_times else 0
                 if min_remain > 0:

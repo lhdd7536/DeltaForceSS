@@ -2,9 +2,11 @@
 Delta Force 自动制造 - GUI 主窗口
 
 提供：
-- 启动/停止自动化循环
-- 显示今日推荐配方及更新时间
-- 运行日志面板
+- 启动/停止单账号自动化循环（工作线程运行 main.main）
+- 调试模式开关（写回 user_config.yaml）
+- 四部门制造配方下拉选择（选项来自 config.yaml，保存写回 user_config.yaml）
+- 运行日志面板（stdout 重定向到队列，主线程轮询刷新）
+- 系统级全局热键（默认 F8，可配置）
 """
 
 import tkinter as tk
@@ -258,7 +260,7 @@ class MainWindow(tk.Tk):
     # ── 配置加载 ────────────────────────────────────────
 
     def _load_config(self):
-        """加载 user_config 到 GUI 控件"""
+        """加载 debug_mode 到 GUI 控件（其余配置在各自功能中按需读取）"""
         try:
             cfg = _load_user_config()
             self.debug_var.set(cfg.get('debug_mode', False))
@@ -358,7 +360,7 @@ class MainWindow(tk.Tk):
         """保存制造配方：将四个部门下拉框选定的物品写回 user_config.yaml
 
         下拉框选项直接来自 config.yaml 的 departments，均为该制造台合法物品，
-        无需额外校验；未选择的部门保持原状（不制造）。
+        无需额外校验；未选择的部门保持原状（不修改其队列）。
         """
         try:
             path = os.path.join(PROJECT_ROOT, 'user_config.yaml')
