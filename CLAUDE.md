@@ -248,4 +248,4 @@ WeGame 启动后，Microsoft Game Input Service 可能抢前台导致 WeGame 窗
 | v3.8 | `1ce519e` | 移除后台模式（删除 background_mode 分支与 alt_tab）；F8 改为系统级全局热键（keyboard.add_hotkey，游戏前台可用）；GUI 制造配方可修改（四部门一行并列只读下拉框，选项来自 config.yaml，保存写回 user_config.yaml）；多账号 WeGame 配置重排（路径置顶、左侧登录+启动、右侧导航、移除退出阶段） |
 | v3.9 | `b6188e1` | 多账号账号编辑对话框新增"完成时间"编辑（`estimated_end`，HH:MM，留空=未设置，"当前时间"/"清空"按钮，`parse_end_time()` 校验归一化），无需手改 `data/accounts.yaml`；GUI 修改账号后预约监控立即重算下次执行时间（`_schedule_dirty`） |
 | v3.10 | `17d71ca` | 适配 S11 游戏模式选择界面：步骤 6 烽火地带坐标改为 (530, 814)（GUI 默认值与 `data/accounts.yaml` 同步） |
-| v3.13 | 待补记 | 适配 S12 游戏模式选择界面：步骤 6 烽火地带坐标改为 (511, 835)（GUI 默认值与 `data/accounts.yaml` 同步） |
+| v3.13 | `a9f8626` | 适配 S12 游戏模式选择界面：步骤 6 烽火地带坐标改为 (511, 835)（GUI 默认值与 `data/accounts.yaml` 同步） |
