@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 本文件为 Claude Code 在此仓库中工作时提供指导和上下文。
 
